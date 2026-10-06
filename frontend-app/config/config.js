@@ -1,2 +1,2 @@
 
-export const API_URL = 'https://app-movil-misalcancias.onrender.com/api';
+export const API_URL = 'https://recauda-api.cmguardado.dev/api';
