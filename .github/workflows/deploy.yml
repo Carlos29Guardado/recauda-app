@@ -3,6 +3,8 @@ name: Deploy Recauda Backend
 on:
   push:
     branches: [ "main" ] # Cambia a 'master' si tu rama se llama así
+    paths:
+      - 'backend-alcancias/**' # Ajusta la ruta según la ubicación de tu backend
 
 jobs:
   deploy:
@@ -15,7 +17,7 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          cd /home/carlos_admin/recauda-app
+          cd /home/carlos_admin/recauda-app/backend-alcancias
           git pull origin main
           npm ci
           pm2 restart recauda-api
