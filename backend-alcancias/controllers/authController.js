@@ -10,9 +10,9 @@ const registro = async (req, res) => {
 
     try {
         const usuarioExistente = await pool.query
-        ('SELECT * FROM usuarios WHERE email = $1', [email]);
-        if(usuarioExistente.rows.length > 0){
-            return res.status(400).json({ mensaje: 'Este correo ya esta registrado'});
+            ('SELECT * FROM usuarios WHERE email = $1', [email]);
+        if (usuarioExistente.rows.length > 0) {
+            return res.status(400).json({ mensaje: 'Este correo ya esta registrado' });
         }
 
         //Encriptar la contraseña
@@ -23,7 +23,7 @@ const registro = async (req, res) => {
             'INSERT INTO usuarios (nombre, email, password, rol, comunidad_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, nombre, email',
             [nombre, email, passwordEncriptada, 'colaborador', null]
         );
-        res.status(201).json({ 
+        res.status(201).json({
             mensaje: 'Usuario registrado exitosamente',
             usuario: nuevoUsuario.rows[0]
         });
@@ -38,10 +38,14 @@ const loginManual = async (req, res) => {
 
     try {
         const { rows } = await pool.query(`
-            SELECT u.*, c.nombre AS comunidad_nombre, c.codigo_invitacion AS comunidad_codigo 
-            FROM usuarios u 
-            LEFT JOIN comunidades c ON u.comunidad_id = c.id 
-            WHERE u.email = $1
+            SELECT u.*, 
+             c.nombre AS comunidad_nombre, 
+             c.codigo_invitacion AS comunidad_codigo,
+             c.rango_inicio,
+             c.rango_fin
+      FROM usuarios u
+      LEFT JOIN comunidades c ON u.comunidad_id = c.id
+      WHERE u.email = $1
         `, [email]);
 
         if (rows.length === 0) {
@@ -64,14 +68,16 @@ const loginManual = async (req, res) => {
         )
         res.json({
             token,
-            usuario: { 
-                id: usuario.id, 
+            usuario: {
+                id: usuario.id,
                 nombre: usuario.nombre,
                 email: usuario.email,
                 rol: usuario.rol,
                 comunidad_id: usuario.comunidad_id,
                 comunidad_nombre: usuario.comunidad_nombre,
-                comunidad_codigo: usuario.comunidad_codigo
+                comunidad_codigo: usuario.comunidad_codigo,
+                rango_inicio: usuario.rango_inicio,
+                rango_fin: usuario.rango_fin
             }
         });
     } catch (error) {
@@ -94,12 +100,16 @@ const loginGoogle = async (req, res) => {
 
         const { email, name } = ticket.getPayload();
         const resultado = await pool.query(`
-            SELECT u.*, c.nombre AS comunidad_nombre, c.codigo_invitacion AS comunidad_codigo 
-            FROM usuarios u 
-            LEFT JOIN comunidades c ON u.comunidad_id = c.id 
-            WHERE u.email = $1
+            SELECT u.*, 
+             c.nombre AS comunidad_nombre, 
+             c.codigo_invitacion AS comunidad_codigo,
+             c.rango_inicio,
+             c.rango_fin
+      FROM usuarios u
+      LEFT JOIN comunidades c ON u.comunidad_id = c.id
+      WHERE u.email = $1
         `, [email]);
-            
+
         let usuario = resultado.rows[0];
 
         if (!usuario) {
@@ -109,6 +119,8 @@ const loginGoogle = async (req, res) => {
             );
             usuario = nuevoUser.rows[0];
             usuario.comunidad_nombre = null;
+            usuario.rango_inicio = null;
+            usuario.rango_fin = null;
         }
         const token = jwt.sign(
             { id: usuario.id, rol: usuario.rol, comunidad_id: usuario.comunidad_id },
@@ -126,7 +138,9 @@ const loginGoogle = async (req, res) => {
                 rol: usuario.rol,
                 comunidad_id: usuario.comunidad_id,
                 comunidad_nombre: usuario.comunidad_nombre,
-                comunidad_codigo: usuario.comunidad_codigo
+                comunidad_codigo: usuario.comunidad_codigo,
+                rango_inicio: usuario.rango_inicio,
+                rango_fin: usuario.rango_fin
             }
         });
 
@@ -135,8 +149,8 @@ const loginGoogle = async (req, res) => {
     }
 };
 
-module.exports = { 
-    loginManual, 
+module.exports = {
+    loginManual,
     loginGoogle,
     registro
 };
