@@ -108,9 +108,49 @@ const obtenerSiguienteAlcancia = async (req, res) => {
   }
 };
 
+const sincronizarAlcanciasOffline = async (req, res) => {
+  const { alcancias } = req.body;
+
+  if(!alcancias || !Array.isArray(alcancias) || alcancias.length === 0){
+    return res.status(400).json({error: 'No se recibieron datos para sincronizar'})
+  }
+
+  try {
+    let insertadas = 0;
+
+    for (const alcancia of alcancias){
+      await pool.query(
+                `INSERT INTO alcancias 
+                (codigo_alcancia, nombre_persona, comunidad_id, usuario_id, colocada, devuelta, faltante, monto_entregado, anio) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [
+                    alcancia.codigo_alcancia,
+                    alcancia.nombre_persona,
+                    alcancia.comunidad_id,
+                    alcancia.usuario_id,
+                    alcancia.colocada || false,      // Valores por defecto de seguridad
+                    alcancia.devuelta || false,
+                    alcancia.faltante || false,
+                    alcancia.monto_entregado || 0,
+                    anioActual
+                ]
+            );
+            insertadas++;
+    }
+    res.status(200).json({
+      mensaje: 'Sincronización exitosa',
+      total_sincronizadas: insertadas
+    });
+  } catch (error) {
+    console.error('Error en sincronización masiva:', error);
+     res.status(500).json({ error: 'Error interno al sincronizar los registros' });
+  }
+}
+
 module.exports = {
   obtenerAlcancias,
   crearAlcancia,
   actualizarAlcancia,
-  obtenerSiguienteAlcancia
+  obtenerSiguienteAlcancia,
+  sincronizarAlcanciasOffline
 };
