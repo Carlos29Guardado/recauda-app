@@ -117,6 +117,7 @@ const sincronizarAlcanciasOffline = async (req, res) => {
 
   try {
     let insertadas = 0;
+    const anioActual = new Date().getFullYear();
 
     for (const alcancia of alcancias){
       await pool.query(
