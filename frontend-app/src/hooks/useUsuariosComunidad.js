@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../../config/config';
+import { fetchApi } from '../services/api';
 
 // Tiempo máximo de espera al servidor
 const TIEMPO_ESPERA_MS = 8000;
@@ -23,14 +23,7 @@ export const useUsuariosComunidad = () => {
                 return;
             }
 
-            // Cortamos la petición si el servidor tarda demasiado
-            const controlador = new AbortController();
-            const temporizador = setTimeout(() => controlador.abort(), TIEMPO_ESPERA_MS);
-
-            const respuesta = await fetch(`${API_URL}/comunidad/usuarios`, {
-                headers: { Authorization: `Bearer ${token}` },
-                signal: controlador.signal
-            }).finally(() => clearTimeout(temporizador));
+            const respuesta = await fetchApi('/comunidad/usuarios', {}, TIEMPO_ESPERA_MS);
 
             const datos = await respuesta.json();
 
