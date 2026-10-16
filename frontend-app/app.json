@@ -28,7 +28,8 @@
           "imageWidth": 200
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
