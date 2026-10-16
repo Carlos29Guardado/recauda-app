@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from '../../config/config';
+import { actualizarAlcanciaLocal, tieneCambiosPendientes } from '../../database/sqlite';
+import { sincronizarPendientes } from '../hooks/useSincronizacion';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
@@ -31,28 +32,27 @@ export default function EditarAlcanciaScreen() {
                 monto_entregado: monto ? parseFloat(monto as string) : null,
             };
 
-            const respuesta = await fetch(`${API_URL}/alcancias/${codigo_alcancia}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload),
-            });
-
-            const datos = await respuesta.json();
-
-            if (respuesta.ok) {
-                Alert.alert(
-                    'Actualizada',
-                    `La alcancía #${codigo_alcancia} ha sido actualizada correctamente.`,
-                    [{ text: 'OK', onPress: () => router.back() }]
-                );
-            } else {
-                Alert.alert('Error', datos.error || 'No se pudo actualizar el registro.');
+            // 1. Guardamos primero en el teléfono, así el cambio no se pierde aunque no haya red
+            const resultadoLocal = actualizarAlcanciaLocal(Number(codigo_alcancia), payload);
+            if (!resultadoLocal.exito) {
+                Alert.alert('Error', resultadoLocal.error || 'No se pudo guardar el cambio en el teléfono.');
+                return;
             }
+
+            // 2. Si hay conexión, lo subimos de una vez para que lo vean los demás voluntarios
+            await sincronizarPendientes();
+            const subida = !tieneCambiosPendientes(Number(codigo_alcancia));
+
+            Alert.alert(
+                subida ? 'Actualizada' : 'Guardada sin conexión',
+                subida
+                    ? `La alcancía #${codigo_alcancia} ha sido actualizada correctamente.`
+                    : `La alcancía #${codigo_alcancia} se guardó en el teléfono y se subirá automáticamente cuando haya conexión.`,
+                [{ text: 'OK', onPress: () => router.back() }]
+            );
         } catch (error) {
             console.error('Error al actualizar:', error);
-            Alert.alert('Error de conexión', 'No se pudo comunicar con el servidor.');
+            Alert.alert('Error', 'No se pudo guardar el cambio.');
         } finally {
             setGuardando(false);
         };

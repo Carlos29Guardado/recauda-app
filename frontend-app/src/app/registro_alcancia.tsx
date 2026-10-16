@@ -1,132 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import React from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useRegistroAlcancia } from '../hooks/useRegistroAlcancia'; // Ajusta la ruta 
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../../config/config';
+import { router } from 'expo-router';
 
 export default function RegistrarAlcanciaScreen() {
-  const router = useRouter();
-
-  const [numeroAlcancia, setNumeroAlcancia] = useState('');
-  const [rangoFin, setRangoFin] = useState(null);
-  const [cargandoInicial, setCargandoInicial] = useState(true);
-
-  const [nombrePersona, setNombrePersona] = useState('');
-  const [monto, setMonto] = useState('');
-  const [estado, setEstado] = useState('Colocada');
-  const [guardando, setGuardando] = useState(false)
 
   const opcionesEstado = ['Colocada', 'Devuelta', 'Faltante'];
+  const {
+    numeroAlcancia,
+    nombrePersona, setNombrePersona,
+    monto, setMonto,
+    estado, setEstado,
+    cargandoInicial,
+    guardando,
+    manejarRegistro
+  } = useRegistroAlcancia();
 
-  useEffect(() => {
-    const obtenerDatosSector = async () => {
-      try {
-        const usuarioString = await AsyncStorage.getItem('userData');
-        if (!usuarioString) return;
-
-        const usuario = JSON.parse(usuarioString);
-
-        const respuesta = await fetch(`${API_URL}/alcancias/siguiente/${usuario.comunidad_id}`);
-        const data = await respuesta.json();
-
-        if (respuesta.ok) {
-          console.log("Datos recibidos del backend:", data);
-          setNumeroAlcancia(data.siguiente_codigo.toString());
-          setRangoFin(data.rango_fin);
-        } else {
-          Alert.alert('Error', 'No se pudo obtener el rango de la comunidad.');
-        }
-      } catch (error) {
-        console.error('Error al cargar los rangos:', error);
-      } finally {
-        setCargandoInicial(false);
-      }
-    };
-    obtenerDatosSector();
-  }, []);
-
-  const manejarRegistro = async () => {
-    if (!nombrePersona || !numeroAlcancia) {
-      Alert.alert('Error', 'Debes ingresar el nombre de la persona.');
-      return;
-    }
-    //Validamos que no se pase del límite de alcancías del sector
-    if (rangoFin && parseInt(numeroAlcancia, 10) > rangoFin) {
-      Alert.alert('Límite alcanzado', `Has llegado al límite de este sector. La última alcancía permitida es la #${rangoFin}.`);
-      return;
-    }
-    setGuardando(true);
-    try {
-      //obtener los datos del usuario activo desde el telefono
-      const usuarioString = await AsyncStorage.getItem('userData');
-      if (!usuarioString) {
-        Alert.alert('Error de Sesión', 'No se encontraron datos del usuario');
-        setGuardando(false);
-        return;
-      }
-
-      const usuario = JSON.parse(usuarioString);
-
-      //Preparar el paquete de datos para enviar al backend
-      const payload = {
-        codigo_alcancia: parseInt(numeroAlcancia, 10),
-        nombre_persona: nombrePersona,
-        comunidad_id: usuario.comunidad_id,
-        usuario_id: usuario.id,
-        colocada: estado === 'Colocada',
-        devuelta: estado === 'Devuelta',
-        faltante: estado === 'Faltante',
-        monto_entregado: monto ? parseFloat(monto) : null,
-      };
-
-      const respuesta = await fetch(`${API_URL}/alcancias`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const datos = await respuesta.json();
-
-      if (respuesta.ok) {
-        Alert.alert(
-          'Éxito',
-          `Alcancía #${numeroAlcancia} registrada correctamente.`,
-          [{
-            text: 'Siguiente',
-            onPress: () => {
-              // En lugar de salir, limpiamos los campos
-              setNombrePersona('');
-              setMonto('');
-              setEstado('Colocada');
-              // Verificamos antes de sumar para el siguiente registro
-              const siguienteNumero = parseInt(numeroAlcancia, 10) + 1;
-              if (rangoFin && siguienteNumero > rangoFin) {
-                Alert.alert('Completado', 'Yas registraste la última alcancia de este sector');
-                setNumeroAlcancia('');
-              } else {
-                setNumeroAlcancia(siguienteNumero.toString());
-              }
-            }
-          }]
-        );
-      } else {
-        Alert.alert('Error', datos.error || 'No se pudo guardar el registro.');
-      }
-    } catch (error) {
-      console.error('Error al guardad:', error);
-      Alert.alert('Error de conexión', 'No se pudo comunicar con el servidor.');
-    } finally {
-      setGuardando(false);
-    }
-  }
   if (cargandoInicial) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
-  }
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color="#0000ff" />
+    </View>
+  );
+}
 
   return (
     <KeyboardAvoidingView
@@ -205,8 +102,14 @@ export default function RegistrarAlcanciaScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.botonGuardar} onPress={manejarRegistro}>
-          <Text style={styles.textoBotonGuardar}>Guardar Registro</Text>
+        <TouchableOpacity 
+          style={[styles.botonGuardar, guardando && { opacity: 0.7 }]} 
+          onPress={manejarRegistro}
+          disabled={guardando} 
+        >
+          <Text style={styles.textoBotonGuardar}>
+            {guardando ? 'Guardando...' : 'Guardar Registro'}
+          </Text>
           <Ionicons name="save-outline" size={20} color="#1E292D" style={{ marginLeft: 8 }} />
         </TouchableOpacity>
 

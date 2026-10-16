@@ -1,89 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, TextInput } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { API_URL } from '../../config/config';
+import { useListaAlcancias } from '../hooks/useListaAlcancias';
 
 export default function ListaAlcanciasScreen() {
   const router = useRouter();
 
-  //Para Buscador
-  //Estado original: guardad la lista completa e intacta de la base de datos.
-  const [alcanciasOriginales, setAlcanciasOriginales] = useState([]);
-  //Estado filtrado: es el que conectamos a la interfaz visual.
-  const [alcanciasFiltrado, setAlcanciasFiltrado] = useState([]);
-
-  const [busqueda, setBusqueda] = useState('');
-  const [alcancias, setAlcancias] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [refrescando, setRefrescando] = useState(false);
-
-  // Función para obtener los datos del backend
-  const cargarAlcancias = async () => {
-    try {
-      const usuarioString = await AsyncStorage.getItem('userData');
-      if(!usuarioString){
-        Alert.alert('Error', 'No se encontró la sesión del usuario');
-        setCargando(false);
-        setRefrescando(false);
-        return;
-      }
-      const usuario = JSON.parse(usuarioString);
-      console.log("INTENTANDO BUSCAR EN:", `${API_URL}/alcancias/comunidad/${usuario.comunidad_id}`);
-      const respuesta = await fetch(`${API_URL}/alcancias/comunidad/${usuario.comunidad_id}`); 
-      const datos = await respuesta.json();
-
-      if (respuesta.ok) {
-        setAlcanciasOriginales(datos);
-        setAlcanciasFiltrado(datos)
-      } else {
-        Alert.alert('Error', datos.error || 'No se pudieron cargar las alcancías.');
-      }
-    } catch (error) {
-      console.error('Error al cargar la lista:', error);
-      Alert.alert('Error de conexión', 'No se pudo conectar con el servidor.');
-    } finally {
-      setCargando(false);
-      setRefrescando(false);
-    }
-  };
-
-  // Se ejecuta automáticamente al abrir la pantalla
- useFocusEffect(
-    useCallback(() => {
-      cargarAlcancias();
-    }, [])
-  );
-
-  // Función para jalar hacia abajo y recargar
-  const onRefresh = () => {
-    setRefrescando(true);
-    cargarAlcancias();
-    setBusqueda('');
-  };
-
-  // Función para determinar qué estado mostrar basado en los booleanos de tu BD
-  const obtenerInfoEstado = (item: any) => {
-    if (item.faltante) return { texto: 'Faltante', color: '#C06C6C', fondo: 'rgba(192, 108, 108, 0.2)' }; // Rojo oscuro
-    if (item.devuelta) return { texto: 'Devuelta', color: '#8FBC8F', fondo: 'rgba(143, 188, 143, 0.2)' }; // Verde sutil
-    return { texto: 'Colocada', color: '#C2DFE3', fondo: 'rgba(194, 223, 227, 0.2)' }; // Celeste por defecto
-  };
-
-  //Función para la caja de busqueda
-  const ejecutarBusqueda = (texto: any) => {
-    setBusqueda(texto);
-
-    if(texto){
-      const nuevosDatos = alcanciasOriginales.filter((item: any) =>{
-        const nombre = item.nombre_persona ? item.nombre_persona.toUpperCase() : '';
-        return nombre.includes(texto.toUpperCase());
-      });
-      setAlcanciasFiltrado(nuevosDatos);
-    } else {
-      setAlcanciasFiltrado(alcanciasOriginales)
-    }
-  };
+  const {
+    alcanciasFiltrado,
+    busqueda,
+    cargando,
+    refrescando,
+    onRefresh,
+    ejecutarBusqueda,
+    obtenerInfoEstado
+  } = useListaAlcancias();
 
   // El diseño de cada tarjeta individual de la lista
   const renderItem = ({ item }: { item: any }) => {

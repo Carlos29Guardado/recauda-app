@@ -32,8 +32,10 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken })
       });
+      const textoCrudo = await respuesta.text();
+      Alert.alert('Respuesta del Servidor', textoCrudo.substring(0, 300));
 
-      const data = await respuesta.json();
+      const data = JSON.parse(textoCrudo);
 
       if (data.token && data.usuario) {
         await AsyncStorage.setItem('userToken', data.token);
@@ -44,9 +46,11 @@ export default function LoginScreen() {
       }
     } catch (error) {
       console.error('Error en el login nativo:', error);
-      Alert.alert('Cancelado', 'El inicio de sesión fue cancelado o hubo un error.');
+      Alert.alert('Cancelado', 'El inicio de sesión fue cancelado o hubo un error.',);
+      const err = error as any;
+      Alert.alert('Detalle del Error', String(err.message || error));
     }
-  };
+   };
 
   const iniciarSesionManual = async () => {
     if (!email || !password) {
@@ -74,6 +78,9 @@ export default function LoginScreen() {
     } catch (error) {
       console.error('Error en login manual:', error);
       Alert.alert('Error', 'No se pudo conectar con el servidor.');
+      Alert.alert('Cancelado', 'El inicio de sesión fue cancelado o hubo un error.',);
+      const err = error as any;
+      Alert.alert('Detalle del Error', String(err.message || error));
     }
   };
 
