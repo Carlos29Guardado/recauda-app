@@ -16,4 +16,6 @@ pool.connect( (err, client, release) =>{
 })
 module.exports = {
   query: (text, params) => pool.query(text, params),
+  // Cliente dedicado para transacciones: BEGIN/COMMIT deben ir en la misma conexión
+  connect: () => pool.connect(),
 };

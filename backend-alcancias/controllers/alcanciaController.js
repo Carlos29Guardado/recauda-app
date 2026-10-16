@@ -115,36 +115,54 @@ const sincronizarAlcanciasOffline = async (req, res) => {
     return res.status(400).json({error: 'No se recibieron datos para sincronizar'})
   }
 
+  // Todo el lote va en una sola transacción: o se guardan todas o ninguna,
+  // así un reintento del teléfono no deja registros a medias
+  let client;
   try {
+    client = await pool.connect();
     let insertadas = 0;
+    let omitidas = 0;
     const anioActual = new Date().getFullYear();
 
+    await client.query('BEGIN');
+
     for (const alcancia of alcancias){
-      await pool.query(
-                `INSERT INTO alcancias 
-                (codigo_alcancia, nombre_persona, comunidad_id, usuario_id, colocada, devuelta, faltante, monto_entregado, anio) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      // Si la alcancía ya existe (reintento de un envío anterior) no se vuelve a insertar
+      const resultado = await client.query(
+                `INSERT INTO alcancias
+                (codigo_alcancia, nombre_persona, comunidad_id, usuario_id, colocada, devuelta, faltante, monto_entregado, anio)
+                SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM alcancias WHERE codigo_alcancia = $1 AND comunidad_id = $3
+                )`,
                 [
                     alcancia.codigo_alcancia,
                     alcancia.nombre_persona,
                     alcancia.comunidad_id,
                     alcancia.usuario_id,
-                    alcancia.colocada || false,      // Valores por defecto de seguridad
-                    alcancia.devuelta || false,
-                    alcancia.faltante || false,
-                    alcancia.monto_entregado || 0,
-                    anioActual
+                    Boolean(alcancia.colocada),      // El teléfono manda 0/1 desde SQLite
+                    Boolean(alcancia.devuelta),
+                    Boolean(alcancia.faltante),
+                    alcancia.monto_entregado ?? null,
+                    alcancia.anio || anioActual
                 ]
             );
-            insertadas++;
+      if (resultado.rowCount === 1) insertadas++;
+      else omitidas++;
     }
+
+    await client.query('COMMIT');
     res.status(200).json({
       mensaje: 'Sincronización exitosa',
-      total_sincronizadas: insertadas
+      total_sincronizadas: insertadas,
+      total_omitidas: omitidas
     });
   } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Error en sincronización masiva:', error);
      res.status(500).json({ error: 'Error interno al sincronizar los registros' });
+  } finally {
+    if (client) client.release();
   }
 }
 
