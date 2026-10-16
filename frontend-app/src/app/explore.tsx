@@ -132,7 +132,10 @@ export default function MenuPrincipalScreen() {
           </TouchableOpacity>
 
           {usuario?.rol === 'admin' && (
-            <TouchableOpacity style={styles.tarjeta}>
+            <TouchableOpacity
+              style={styles.tarjeta}
+              onPress={() => router.push('/usuarios' as any)}
+            >
               <View style={styles.iconoContainer}>
                 <Ionicons name="people" size={32} color="#C2DFE3" />
               </View>

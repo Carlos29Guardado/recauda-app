@@ -68,4 +68,39 @@ const unirseComunidad = async (req, res) => {
     }
 };
 
-module.exports = { crearComunidad, unirseComunidad };
+const obtenerUsuariosComunidad = async (req, res) => {
+    try {
+        // El token del login manual solo trae id y email, y el rol/comunidad pueden
+        // haber cambiado después del login, así que se consultan en la base de datos
+        const resultSolicitante = await pool.query(
+            'SELECT comunidad_id, rol FROM usuarios WHERE id = $1',
+            [req.usuario.id]
+        );
+
+        const solicitante = resultSolicitante.rows[0];
+
+        if (!solicitante || !solicitante.comunidad_id) {
+            return res.status(404).json({ mensaje: 'No perteneces a ninguna comunidad.' });
+        }
+
+        if (solicitante.rol !== 'admin') {
+            return res.status(403).json({ mensaje: 'Solo el administrador puede ver los usuarios de la comunidad.' });
+        }
+
+        // Primero el administrador y después los colaboradores, ordenados por nombre
+        const resultUsuarios = await pool.query(
+            `SELECT id, nombre, email, rol
+             FROM usuarios
+             WHERE comunidad_id = $1
+             ORDER BY CASE WHEN rol = 'admin' THEN 0 ELSE 1 END, nombre ASC`,
+            [solicitante.comunidad_id]
+        );
+
+        res.status(200).json(resultUsuarios.rows);
+    } catch (error) {
+        console.error('Error al obtener usuarios de la comunidad:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    }
+};
+
+module.exports = { crearComunidad, unirseComunidad, obtenerUsuariosComunidad };
