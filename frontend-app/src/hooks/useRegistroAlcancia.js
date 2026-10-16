@@ -102,7 +102,7 @@ export const useRegistroAlcancia = () => {
           }]
         );
       } else {
-        Alert.alert('Error', 'No se pudo guardar el registro localmente.');
+        Alert.alert('Error', resultadoLocal?.error || 'No se pudo guardar el registro localmente.');
       }
     } catch (error) {
       console.error('Error al registrar la alcancía:', error);

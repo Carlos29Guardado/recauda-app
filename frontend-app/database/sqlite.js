@@ -10,7 +10,7 @@ export const createTables = () => {
            local_id TEXT PRIMARY KEY,
            id INTEGER,
 
-           codigo_alcancia INTEGER NOT NULL,
+           codigo_alcancia INTEGER NOT NULL UNIQUE,
            nombre_persona TEXT NOT NULL,
            comunidad_id INTEGER,
            usuario_id INTEGER,
@@ -25,12 +25,48 @@ export const createTables = () => {
            sync_status TEXT DEFAULT 'pending_insert'
            );
          ` );
+         migrarCodigoUnico();
          console.log('Base de datos local, inicializada con el esquema de Neon');
-         
+
     } catch (error) {
         console.error('Error al inicializar db:', error);
-        
+
     }
+};
+
+// Migración 1: los teléfonos que ya tenían la tabla no reciben el UNIQUE del CREATE TABLE,
+// así que limpiamos los duplicados existentes y creamos el índice único a mano.
+const migrarCodigoUnico = () => {
+    const { user_version } = db.getFirstSync('PRAGMA user_version');
+    if (user_version >= 1) return;
+
+    db.withTransactionSync(() => {
+        const indiceUnico = db.getFirstSync(
+            `SELECT COUNT(*) AS total
+             FROM pragma_index_list('alcancias') AS il
+             JOIN pragma_index_info(il.name) AS ii
+             WHERE il."unique" = 1 AND ii.name = 'codigo_alcancia'`
+        );
+
+        if (indiceUnico.total === 0) {
+            // Por cada código se queda una sola fila: primero las que tienen cambios sin subir
+            // (para no perder trabajo offline) y, entre iguales, la más reciente
+            db.runSync(
+                `DELETE FROM alcancias WHERE rowid IN (
+                   SELECT a.rowid FROM alcancias a
+                   JOIN alcancias b
+                     ON a.codigo_alcancia = b.codigo_alcancia AND a.rowid <> b.rowid
+                   WHERE (CASE a.sync_status WHEN 'synced' THEN 0 ELSE 1 END) < (CASE b.sync_status WHEN 'synced' THEN 0 ELSE 1 END)
+                      OR ((CASE a.sync_status WHEN 'synced' THEN 0 ELSE 1 END) = (CASE b.sync_status WHEN 'synced' THEN 0 ELSE 1 END)
+                          AND a.rowid < b.rowid)
+                 )`
+            );
+            db.execSync('CREATE UNIQUE INDEX IF NOT EXISTS idx_alcancias_codigo ON alcancias(codigo_alcancia)');
+            console.log('Migración: duplicados eliminados e índice único creado en codigo_alcancia');
+        }
+
+        db.execSync('PRAGMA user_version = 1');
+    });
 };
 
 export default db;
@@ -71,6 +107,9 @@ export const guardarAlcanciaLocal = (datosFormulario) => { // <-- 1. Agregamos l
 
   } catch (error) {
     console.error('Error al guardar en SQLite:', error);
+    if (String(error.message).includes('UNIQUE')) {
+      return { exito: false, error: `Ya existe una alcancía con el número ${datosFormulario.codigo_alcancia}.` };
+    }
     return { exito: false, error: error.message || "Error desconocido" };
   }
 }
@@ -113,7 +152,9 @@ export const obtenerAlcanciasLocales = (comunidad_id) => {
 };
 
 // Reemplaza la copia local de la comunidad con los datos del servidor.
-// Las alcancías con sync_status 'pending_insert' no se tocan para no perder registros offline.
+// - Si el código ya existe como 'pending_insert', el servidor ya lo tiene: se reemplaza con
+//   los datos del servidor y queda como 'synced' (así no aparece duplicado).
+// - Las de 'pending_update' no se tocan para no perder cambios offline que aún no se suben.
 export const guardarAlcanciasServidor = (alcancias, comunidad_id) => {
   try {
     db.withTransactionSync(() => {
@@ -122,24 +163,35 @@ export const guardarAlcanciasServidor = (alcancias, comunidad_id) => {
         [comunidad_id]
       );
 
-      // Las que tienen cambios locales sin subir mandan sobre la versión del servidor
-      const pendientes = db.getAllSync(
-        "SELECT codigo_alcancia FROM alcancias WHERE comunidad_id = ? AND sync_status != 'synced'",
-        [comunidad_id]
+      // Postgres puede mandar codigo_alcancia como texto; lo normalizamos a número para comparar
+      const conCambiosSinSubir = db.getAllSync(
+        "SELECT codigo_alcancia FROM alcancias WHERE sync_status = 'pending_update'"
       );
-      const codigosPendientes = new Set(pendientes.map((p) => p.codigo_alcancia));
+      const codigosConCambios = new Set(conCambiosSinSubir.map((p) => Number(p.codigo_alcancia)));
 
       for (const a of alcancias) {
-        if (codigosPendientes.has(a.codigo_alcancia)) continue;
+        const codigo = Number(a.codigo_alcancia);
+        if (codigosConCambios.has(codigo)) continue;
 
         // Postgres devuelve booleanos y NUMERIC como texto; SQLite guarda 0/1 y REAL
         db.runSync(
-          `INSERT OR REPLACE INTO alcancias (
+          `INSERT INTO alcancias (
             local_id, id, codigo_alcancia, nombre_persona, comunidad_id, usuario_id,
             colocada, devuelta, faltante, monto_entregado, anio, sync_status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')
+          ON CONFLICT(codigo_alcancia) DO UPDATE SET
+            id = excluded.id,
+            nombre_persona = excluded.nombre_persona,
+            comunidad_id = excluded.comunidad_id,
+            usuario_id = excluded.usuario_id,
+            colocada = excluded.colocada,
+            devuelta = excluded.devuelta,
+            faltante = excluded.faltante,
+            monto_entregado = excluded.monto_entregado,
+            anio = excluded.anio,
+            sync_status = 'synced'`,
           [
-            `srv-${a.id}`, a.id, a.codigo_alcancia, a.nombre_persona, a.comunidad_id, a.usuario_id,
+            `srv-${a.id}`, a.id, codigo, a.nombre_persona, Number(a.comunidad_id), a.usuario_id,
             a.colocada ? 1 : 0, a.devuelta ? 1 : 0, a.faltante ? 1 : 0,
             a.monto_entregado != null ? parseFloat(a.monto_entregado) : null,
             a.anio
