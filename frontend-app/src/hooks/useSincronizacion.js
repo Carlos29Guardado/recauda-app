@@ -8,20 +8,10 @@ import {
     marcarActualizacionSincronizada,
     contarPendientes
 } from '../../database/sqlite';
-import { API_URL } from '../../config/config';
-
-// Tiempo máximo de espera por cada petición al servidor
-const TIEMPO_ESPERA_MS = 10000;
+import { fetchApi } from '../services/api';
 
 //Candado virtual compartido: evita que la pantalla y el listener de red suban lo mismo dos veces
 let sincronizando = false;
-
-const fetchConTiempo = (url, opciones = {}) => {
-    const controlador = new AbortController();
-    const temporizador = setTimeout(() => controlador.abort(), TIEMPO_ESPERA_MS);
-    return fetch(url, { ...opciones, signal: controlador.signal })
-        .finally(() => clearTimeout(temporizador));
-};
 
 // Sube al servidor las alcancías nuevas y los cambios guardados offline.
 // Devuelve cuántas se subieron y cuántas quedan pendientes.
@@ -41,7 +31,7 @@ export const sincronizarPendientes = async () => {
         const nuevas = obtenerAlcanciasPendientes();
         if (nuevas.length > 0) {
             console.log(`Sincronizando ${nuevas.length} alcancías nuevas...`);
-            const respuesta = await fetchConTiempo(`${API_URL}/alcancias/sincronizar`, {
+            const respuesta = await fetchApi('/alcancias/sincronizar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ alcancias: nuevas })
@@ -55,7 +45,7 @@ export const sincronizarPendientes = async () => {
         // 2. Cambios de estado y monto hechos sin conexión
         const cambios = obtenerActualizacionesPendientes();
         for (const a of cambios) {
-            const respuesta = await fetchConTiempo(`${API_URL}/alcancias/${a.codigo_alcancia}`, {
+            const respuesta = await fetchApi(`/alcancias/${a.codigo_alcancia}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

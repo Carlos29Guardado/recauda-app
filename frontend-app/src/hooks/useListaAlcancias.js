@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { API_URL } from '../../config/config';
+import { fetchApi } from '../services/api';
 import { obtenerAlcanciasLocales, guardarAlcanciasServidor } from '../../database/sqlite';
 import { sincronizarPendientes } from './useSincronizacion';
 
@@ -51,14 +51,7 @@ export const useListaAlcancias = () => {
             // Subimos primero los cambios offline para que la lista traiga la versión más reciente
             await sincronizarPendientes();
 
-            // Cortamos la petición si el servidor tarda demasiado (red lenta o sin salida a internet)
-            const controlador = new AbortController();
-            const temporizador = setTimeout(() => controlador.abort(), TIEMPO_ESPERA_MS);
-
-            console.log("INTENTANDO BUSCAR EN:", `${API_URL}/alcancias/comunidad/${usuario.comunidad_id}`);
-            const respuesta = await fetch(`${API_URL}/alcancias/comunidad/${usuario.comunidad_id}`, {
-                signal: controlador.signal
-            }).finally(() => clearTimeout(temporizador));
+            const respuesta = await fetchApi(`/alcancias/comunidad/${usuario.comunidad_id}`, {}, TIEMPO_ESPERA_MS);
 
             if (!respuesta.ok) {
                 throw new Error(`El servidor respondió con estado ${respuesta.status}`);

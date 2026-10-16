@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../../config/config';
+import { fetchApi } from '../services/api';
 import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite'; 
 
 export const useRegistroAlcancia = () => {
@@ -34,7 +34,7 @@ export const useRegistroAlcancia = () => {
                 const siguienteLocal = obtenerSiguienteCodigoLocal(usuario.comunidad_id, rangoInicio);
 
                 try {
-                    const respuesta = await fetch(`${API_URL}/alcancias/siguiente/${usuario.comunidad_id}`)
+                    const respuesta = await fetchApi(`/alcancias/siguiente/${usuario.comunidad_id}`, {}, 8000);
                     if (respuesta.ok) {
                         const data = await respuesta.json();
 

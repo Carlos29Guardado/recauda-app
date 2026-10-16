@@ -3,6 +3,10 @@ const pool = require('../config/db');
 const obtenerAlcancias = async (req, res) =>{
     try {
         const { comunidad_id } = req.params;
+        // Solo se pueden ver las alcancías de la comunidad a la que pertenece el usuario
+        if (Number(comunidad_id) !== req.comunidadId) {
+            return res.status(403).json({ error: 'No tienes acceso a esta comunidad' });
+        }
         const resultado = await pool.query('SELECT * FROM alcancias WHERE comunidad_id = $1 ORDER BY codigo_alcancia ASC', [comunidad_id]);
         res.status(200).json(resultado.rows);
     } catch (error) {
@@ -11,8 +15,11 @@ const obtenerAlcancias = async (req, res) =>{
     }
 }
 const crearAlcancia = async (req, res) => {
-  const { codigo_alcancia, nombre_persona, comunidad_id, usuario_id, colocada, devuelta, faltante, monto_entregado } = req.body;
-  
+  const { codigo_alcancia, nombre_persona, colocada, devuelta, faltante, monto_entregado } = req.body;
+  // La comunidad y el usuario salen de la sesión, no del body
+  const comunidad_id = req.comunidadId;
+  const usuario_id = req.usuario.id;
+
   const anioActual = new Date().getFullYear();
 
   try {
@@ -42,11 +49,11 @@ const actualizarAlcancia = async (req, res) => {
            devuelta = $2, 
            faltante = $3, 
            monto_entregado = $4 
-       WHERE codigo_alcancia = $5 
+       WHERE codigo_alcancia = $5 AND comunidad_id = $6
        RETURNING *`,
-       [colocada, devuelta, faltante, monto_entregado, codigo]
+       [colocada, devuelta, faltante, monto_entregado, codigo, req.comunidadId]
     );
-    // Verificamos si realmente se encontró y actualizó la alcancía
+    // Verificamos si realmente se encontró y actualizó la alcancía (en la comunidad del usuario)
     if (alcanciaActualizada.rows.length === 0) {
       return res.status(404).json({ error: 'Alcancía no encontrada' });
     }
@@ -59,6 +66,10 @@ const actualizarAlcancia = async (req, res) => {
 }
 const obtenerSiguienteAlcancia = async (req, res) => {
   const { comunidad_id } = req.params;
+
+  if (Number(comunidad_id) !== req.comunidadId) {
+    return res.status(403).json({ error: 'No tienes acceso a esta comunidad' });
+  }
 
   try {
     // 1. Obtener los rangos de la comunidad
@@ -122,11 +133,18 @@ const sincronizarAlcanciasOffline = async (req, res) => {
     client = await pool.connect();
     let insertadas = 0;
     let omitidas = 0;
+    let rechazadas = 0;
     const anioActual = new Date().getFullYear();
 
     await client.query('BEGIN');
 
     for (const alcancia of alcancias){
+      // Solo se aceptan alcancías de la comunidad del usuario que sincroniza
+      if (Number(alcancia.comunidad_id) !== req.comunidadId) {
+        rechazadas++;
+        continue;
+      }
+
       // Si la alcancía ya existe (reintento de un envío anterior) no se vuelve a insertar
       const resultado = await client.query(
                 `INSERT INTO alcancias
@@ -138,8 +156,8 @@ const sincronizarAlcanciasOffline = async (req, res) => {
                 [
                     alcancia.codigo_alcancia,
                     alcancia.nombre_persona,
-                    alcancia.comunidad_id,
-                    alcancia.usuario_id,
+                    req.comunidadId,
+                    req.usuario.id,                  // Quien sincroniza es quien las registró
                     Boolean(alcancia.colocada),      // El teléfono manda 0/1 desde SQLite
                     Boolean(alcancia.devuelta),
                     Boolean(alcancia.faltante),
@@ -155,7 +173,8 @@ const sincronizarAlcanciasOffline = async (req, res) => {
     res.status(200).json({
       mensaje: 'Sincronización exitosa',
       total_sincronizadas: insertadas,
-      total_omitidas: omitidas
+      total_omitidas: omitidas,
+      total_rechazadas: rechazadas
     });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
