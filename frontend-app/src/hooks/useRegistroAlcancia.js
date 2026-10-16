@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/config';
@@ -13,6 +13,8 @@ export const useRegistroAlcancia = () => {
     const [monto, setMonto] = useState('');
     const [estado, setEstado] = useState('Colocada');
     const [guardando, setGuardando] = useState(false);
+    //Candado para que un doble toque rápido no registre la misma alcancía dos veces
+    const registrando = useRef(false);
 
     const opcionesEstado = ['Colocada', 'Devuelta', 'Faltante'];
 
@@ -56,11 +58,13 @@ export const useRegistroAlcancia = () => {
         obtenerDatosSector();
     }, []);
     const manejarRegistro = async () => {
+    if (registrando.current) return;
+    registrando.current = true;
+    setGuardando(true);
+
     try {
-      Alert.alert("Debug", "1. Entró a manejarRegistro");
 
       const usuarioString = await AsyncStorage.getItem('userData');
-      Alert.alert("Debug", `2. Usuario leído: ${usuarioString ? 'Sí' : 'No'}`);
 
       if (!usuarioString) {
         Alert.alert('Error de Sesión', 'No se encontraron datos del usuario');
@@ -80,9 +84,7 @@ export const useRegistroAlcancia = () => {
         monto_entregado: monto ? parseFloat(monto) : null,
       };
 
-      Alert.alert("Debug", "3. Llamando a guardarAlcanciaLocal...");
       const resultadoLocal = guardarAlcanciaLocal(payload);
-      Alert.alert("Debug", `4. Resultado: ${JSON.stringify(resultadoLocal)}`);
 
       if (resultadoLocal && resultadoLocal.exito) {
         Alert.alert(
@@ -103,9 +105,10 @@ export const useRegistroAlcancia = () => {
         Alert.alert('Error', 'No se pudo guardar el registro localmente.');
       }
     } catch (error) {
-      // AQUÍ ESTÁ EL TRUCO: Mostramos el error real en la pantalla del cel
-      Alert.alert('Error Crítico Catched', error.message || JSON.stringify(error));
+      console.error('Error al registrar la alcancía:', error);
+      Alert.alert('Error', 'Ocurrió un problema al registrar la alcancía. Intenta de nuevo.');
     } finally {
+      registrando.current = false;
       setGuardando(false);
     }
   };
