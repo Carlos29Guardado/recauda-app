@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, KeyboardAvoidingView, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config/config'
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, Link } from 'expo-router';
+import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
 // Configuración global de Google
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_WEB_CLIENT_ID
@@ -17,6 +18,59 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verificandoSesion, setVerificandoSesion] = useState(true);
+
+  // Si ya hay una sesión guardada en el teléfono, se entra directo sin pedir internet.
+  // Solo el primer inicio de sesión (o después de cerrar sesión) necesita conexión.
+  useEffect(() => {
+    const revisarSesionGuardada = async () => {
+      try {
+        const [token, usuario] = await Promise.all([
+          AsyncStorage.getItem('userToken'),
+          AsyncStorage.getItem('userData'),
+        ]);
+        if (token && usuario) {
+          router.replace('/bienvenida');
+          return;
+        }
+      } catch (error) {
+        console.error('Error al leer la sesión guardada:', error);
+      }
+      setVerificandoSesion(false);
+    };
+    revisarSesionGuardada();
+  }, []);
+
+  // Guarda la sesión nueva. Si en el teléfono había datos de OTRA cuenta, se borran
+  // (avisando si tenía cambios sin subir) para no subirlos con la sesión equivocada.
+  // Devuelve false si el usuario decide cancelar.
+  const guardarSesion = async (data: any) => {
+    const anteriorString = await AsyncStorage.getItem('userData');
+    const anterior = anteriorString ? JSON.parse(anteriorString) : null;
+
+    if (anterior && anterior.id !== data.usuario.id) {
+      const pendientes = contarPendientes();
+      if (pendientes > 0) {
+        const continuar = await new Promise<boolean>((resolve) =>
+          Alert.alert(
+            'Cambios de otra cuenta',
+            `En este teléfono hay ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin subir de otra cuenta (${anterior.email || anterior.nombre}). Si continúas se borrarán.`,
+            [
+              { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Continuar', style: 'destructive', onPress: () => resolve(true) },
+            ],
+            { cancelable: false }
+          )
+        );
+        if (!continuar) return false;
+      }
+      borrarDatosLocales();
+    }
+
+    await AsyncStorage.setItem('userToken', data.token);
+    await AsyncStorage.setItem('userData', JSON.stringify(data.usuario));
+    return true;
+  };
 
   const iniciarSesionNativo = async () => {
     try {
@@ -36,9 +90,7 @@ export default function LoginScreen() {
       const data = await respuesta.json();
 
       if (data.token && data.usuario) {
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(data.usuario));
-        router.replace('/bienvenida');
+        if (await guardarSesion(data)) router.replace('/bienvenida');
       } else {
         Alert.alert('Error', 'No se pudo verificar el usuario en tu base de datos.');
       }
@@ -65,17 +117,24 @@ export default function LoginScreen() {
       const data = await respuesta.json();
 
       if (data.token && data.usuario) {
-        await AsyncStorage.setItem('userToken', data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(data.usuario));
-        router.replace('/bienvenida');
+        if (await guardarSesion(data)) router.replace('/bienvenida');
       } else {
         Alert.alert('Error', data.mensaje || 'Credenciales incorrectas.');
       }
     } catch (error) {
       console.error('Error en login manual:', error);
-      Alert.alert('Error', 'No se pudo conectar con el servidor.');
+      Alert.alert('Error', 'No se pudo conectar con el servidor. El primer inicio de sesión necesita internet.');
     }
   };
+
+  // Mientras se revisa si hay sesión guardada, no mostramos el formulario (evita un parpadeo)
+  if (verificandoSesion) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#C2DFE3" />
+      </View>
+    );
+  }
 
 
   return (
