@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { fetchApi } from '../services/api';
+import { fetchApi, comunidadEstaActiva } from '../services/api';
 import { obtenerAlcanciasLocales, guardarAlcanciasServidor } from '../../database/sqlite';
 import { sincronizarPendientes } from './useSincronizacion';
 
@@ -19,6 +19,7 @@ export const useListaAlcancias = () => {
 
     const [busqueda, setBusqueda] = useState('');
     const [cargando, setCargando] = useState(true);
+    const [comunidadActiva, setComunidadActiva] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
 
     //Funcion para cargar los datos de la base de datos local
@@ -39,6 +40,7 @@ export const useListaAlcancias = () => {
                 return;
             }
             usuario = JSON.parse(usuarioString);
+            setComunidadActiva(comunidadEstaActiva(usuario));
 
             // Si el teléfono no tiene red, ni siquiera intentamos el fetch
             const estadoRed = await NetInfo.fetch();
@@ -115,6 +117,7 @@ export const useListaAlcancias = () => {
         refrescando,
         onRefresh,
         ejecutarBusqueda,
-        obtenerInfoEstado
+        obtenerInfoEstado,
+        comunidadActiva
     };
 };

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
+import { comunidadEstaActiva, refrescarEstadoComunidad } from '../services/api';
 
 export default function MenuPrincipalScreen() {
   const [usuario, setUsuario] = useState<any>(null);
@@ -20,6 +21,12 @@ export default function MenuPrincipalScreen() {
           const usuarioParseado = JSON.parse(usuarioString);
           console.log("Datos exactos en AsyncStorage:", usuarioParseado);
           setUsuario(usuarioParseado);
+
+          // Si hay internet, revisamos si el admin cerró o reabrió la comunidad
+          if (usuarioParseado.comunidad_id) {
+            const activa = await refrescarEstadoComunidad();
+            if (activa !== null) setUsuario({ ...usuarioParseado, comunidad_activa: activa });
+          }
         } else {
           console.log("El AsyncStorage está completamente vacío.");
         }
@@ -113,10 +120,26 @@ export default function MenuPrincipalScreen() {
         </View>
 
         <View style={styles.modulosContainer}>
-          {/* Tarjeta 1: Registro (Visible para todos) */}
+          {/* Comunidad cerrada: la campaña terminó y todo queda solo para consulta */}
+          {!comunidadEstaActiva(usuario) && (
+            <View style={styles.avisoCerrada}>
+              <Ionicons name="lock-closed-outline" size={20} color="#E0B15C" />
+              <Text style={styles.textoAvisoCerrada}>
+                Comunidad cerrada: la campaña terminó. Puedes consultar las alcancías, pero ya no registrar ni editar.
+              </Text>
+            </View>
+          )}
+
+          {/* Tarjeta 1: Registro (Visible para todos; deshabilitada si la comunidad está cerrada) */}
           <TouchableOpacity
-            style={styles.tarjeta}
-            onPress={() => router.push('/registro_alcancia')} // Conexión de la ruta
+            style={[styles.tarjeta, !comunidadEstaActiva(usuario) && { opacity: 0.4 }]}
+            onPress={() => {
+              if (!comunidadEstaActiva(usuario)) {
+                Alert.alert('Comunidad cerrada', 'La campaña terminó: ya no se pueden registrar alcancías.');
+                return;
+              }
+              router.push('/registro_alcancia');
+            }}
           >
             <View style={styles.iconoContainer}>
               <Ionicons name="add-circle" size={32} color="#C2DFE3" />
@@ -271,6 +294,22 @@ const styles = StyleSheet.create({
   modulosContainer: {
     padding: 20,
     marginTop: 10,
+  },
+  avisoCerrada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    marginBottom: 15,
+    borderRadius: 14,
+    backgroundColor: 'rgba(224, 177, 92, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(224, 177, 92, 0.4)',
+  },
+  textoAvisoCerrada: {
+    color: '#E0B15C',
+    fontSize: 14,
+    flex: 1,
   },
   tarjeta: {
     flexDirection: 'row',

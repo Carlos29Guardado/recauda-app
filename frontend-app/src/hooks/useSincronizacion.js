@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     obtenerAlcanciasPendientes,
     marcarComoSincronizadas,
@@ -9,7 +10,7 @@ import {
     marcarConflictos,
     contarPendientes
 } from '../../database/sqlite';
-import { fetchApi } from '../services/api';
+import { fetchApi, comunidadEstaActiva } from '../services/api';
 
 //Candado virtual compartido: evita que la pantalla y el listener de red suban lo mismo dos veces
 let sincronizando = false;
@@ -25,6 +26,10 @@ export const sincronizarPendientes = async () => {
     const estadoRed = await NetInfo.fetch();
     if (estadoRed.isConnected === false || estadoRed.isInternetReachable === false) return resultado;
 
+    // Con la comunidad cerrada el servidor no acepta cambios: se quedan guardados por si se reabre
+    const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+    if (!comunidadEstaActiva(usuario)) return resultado;
+
     //Cerramos el candado antes de enviar al servidor
     sincronizando = true;
     try {
@@ -37,6 +42,8 @@ export const sincronizarPendientes = async () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ alcancias: nuevas })
             });
+            // 403: sesión vencida o comunidad cerrada (fetchApi ya avisó); no tiene caso seguir
+            if (respuesta.status === 403) return resultado;
             if (respuesta.ok) {
                 const datos = await respuesta.json().catch(() => ({}));
 
@@ -73,6 +80,7 @@ export const sincronizarPendientes = async () => {
                     monto_entregado: a.monto_entregado
                 })
             });
+            if (respuesta.status === 403) return resultado;
             if (respuesta.ok) {
                 marcarActualizacionSincronizada(a.local_id, a.monto_entregado, a.colocada, a.devuelta, a.faltante);
                 resultado.actualizadas++;

@@ -31,6 +31,45 @@ const avisarSesionVencida = async () => {
     );
 };
 
+// Guarda en la sesión si la comunidad está activa o cerrada (campaña finalizada).
+// Con este dato la app funciona en modo "solo consulta" aunque no haya internet.
+export const guardarEstadoComunidad = async (activa) => {
+    const usuarioString = await AsyncStorage.getItem('userData');
+    if (!usuarioString) return;
+    await AsyncStorage.setItem('userData', JSON.stringify({ ...JSON.parse(usuarioString), comunidad_activa: activa }));
+};
+
+// La comunidad está activa salvo que se haya marcado explícitamente como cerrada
+export const comunidadEstaActiva = (usuario) => usuario?.comunidad_activa !== false;
+
+// Evita repetir el aviso de comunidad cerrada en cada petición
+let avisoCierreMostrado = false;
+
+const avisarComunidadCerrada = async () => {
+    await guardarEstadoComunidad(false);
+    if (avisoCierreMostrado) return;
+    avisoCierreMostrado = true;
+    Alert.alert(
+        'Comunidad cerrada',
+        'El administrador cerró la comunidad porque la campaña terminó. Puedes consultar las alcancías, pero ya no registrar ni editar. Si tenías cambios sin subir, se quedan guardados en el teléfono por si la comunidad se reabre.'
+    );
+};
+
+// Pregunta al servidor si la comunidad sigue activa y lo guarda en la sesión.
+// Devuelve true/false, o null si no se pudo consultar (sin internet).
+export const refrescarEstadoComunidad = async () => {
+    try {
+        const respuesta = await fetchApi('/comunidad/estado', {}, 6000);
+        if (!respuesta.ok) return null;
+        const { activa } = await respuesta.json();
+        await guardarEstadoComunidad(activa);
+        if (activa) avisoCierreMostrado = false;
+        return activa;
+    } catch (error) {
+        return null;
+    }
+};
+
 // fetch hacia la API con el token de sesión y un tiempo máximo de espera.
 // `ruta` es relativa a API_URL, por ejemplo '/alcancias/sincronizar'.
 export const fetchApi = async (ruta, opciones = {}, tiempoMs = TIEMPO_ESPERA_MS) => {
@@ -54,6 +93,8 @@ export const fetchApi = async (ruta, opciones = {}, tiempoMs = TIEMPO_ESPERA_MS)
         const cuerpo = await respuesta.clone().json().catch(() => ({}));
         if (String(cuerpo.error || '').includes('Token')) {
             avisarSesionVencida();
+        } else if (cuerpo.comunidad_cerrada) {
+            avisarComunidadCerrada();
         }
     }
 

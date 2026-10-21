@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchApi } from '../services/api';
+import { fetchApi, comunidadEstaActiva } from '../services/api';
 import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite'; 
 
 export const useRegistroAlcancia = () => {
@@ -86,6 +86,11 @@ export const useRegistroAlcancia = () => {
       }
 
       const usuario = JSON.parse(usuarioString);
+
+      if (!comunidadEstaActiva(usuario)) {
+        Alert.alert('Comunidad cerrada', 'La campaña terminó: ya no se pueden registrar alcancías en esta comunidad.');
+        return;
+      }
 
       // El número se calcula automáticamente; si está vacío es que ya se usó todo el rango
       const codigo = Number(numeroAlcancia);

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflicto, obtenerSiguienteCodigoLocal } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
-import { fetchApi } from '../services/api';
+import { fetchApi, comunidadEstaActiva } from '../services/api';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
@@ -55,6 +55,12 @@ export default function EditarAlcanciaScreen() {
 
     const opcionesEstado = ['Colocada', 'Devuelta', 'Faltante'];
     const manejarActualizacion = async () => {
+        const usuarioSesion = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+        if (!comunidadEstaActiva(usuarioSesion)) {
+            Alert.alert('Comunidad cerrada', 'La campaña terminó: las alcancías solo se pueden consultar.');
+            return;
+        }
+
         // Si la marcan como devuelta, idealmente debería tener un monto (aunque sea 0)
         if (estado === 'Devuelta' && !monto) {
             Alert.alert('Atención', 'Asegúrate de ingresar el monto recaudado. Si está vacía, ingresa 0.');
