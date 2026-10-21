@@ -103,4 +103,88 @@ const obtenerUsuariosComunidad = async (req, res) => {
     }
 };
 
-module.exports = { crearComunidad, unirseComunidad, obtenerUsuariosComunidad };
+// Genera un código de invitación de 6 caracteres que no esté usado por otra comunidad
+const generarCodigoUnico = async () => {
+    for (let intento = 0; intento < 10; intento++) {
+        const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const { rows } = await pool.query('SELECT 1 FROM comunidades WHERE codigo_invitacion = $1', [codigo]);
+        if (rows.length === 0 && codigo.length === 6) return codigo;
+    }
+    throw new Error('No se pudo generar un código de invitación único');
+};
+
+// Datos de la comunidad para la pantalla "Administrar comunidad" (solo admin)
+const obtenerDetalleComunidad = async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT c.id, c.nombre, c.codigo_invitacion, c.rango_inicio, c.rango_fin,
+                    (SELECT COUNT(*) FROM usuarios u WHERE u.comunidad_id = c.id) AS total_miembros,
+                    (SELECT COUNT(*) FROM alcancias a WHERE a.comunidad_id = c.id) AS total_alcancias
+             FROM comunidades c
+             WHERE c.id = $1`,
+            [req.comunidadId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ mensaje: 'Comunidad no encontrada.' });
+        }
+
+        const c = rows[0];
+        res.status(200).json({
+            id: c.id,
+            nombre: c.nombre,
+            codigo_invitacion: c.codigo_invitacion,
+            rango_inicio: c.rango_inicio,
+            rango_fin: c.rango_fin,
+            total_miembros: Number(c.total_miembros),
+            total_alcancias: Number(c.total_alcancias)
+        });
+    } catch (error) {
+        console.error('Error al obtener detalle de la comunidad:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    }
+};
+
+// Cambia el nombre de la comunidad (solo admin)
+const cambiarNombreComunidad = async (req, res) => {
+    const nombre = String(req.body.nombre || '').trim();
+
+    if (nombre.length < 3 || nombre.length > 60) {
+        return res.status(400).json({ mensaje: 'El nombre debe tener entre 3 y 60 caracteres.' });
+    }
+
+    try {
+        const { rows } = await pool.query(
+            'UPDATE comunidades SET nombre = $1 WHERE id = $2 RETURNING nombre',
+            [nombre, req.comunidadId]
+        );
+        res.status(200).json({ mensaje: 'Nombre actualizado', nombre: rows[0].nombre });
+    } catch (error) {
+        console.error('Error al cambiar el nombre de la comunidad:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    }
+};
+
+// Genera un código de invitación nuevo; el anterior deja de funcionar (solo admin)
+const regenerarCodigoInvitacion = async (req, res) => {
+    try {
+        const codigo = await generarCodigoUnico();
+        await pool.query(
+            'UPDATE comunidades SET codigo_invitacion = $1 WHERE id = $2',
+            [codigo, req.comunidadId]
+        );
+        res.status(200).json({ mensaje: 'Código actualizado', codigo_invitacion: codigo });
+    } catch (error) {
+        console.error('Error al regenerar el código de invitación:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    }
+};
+
+module.exports = {
+    crearComunidad,
+    unirseComunidad,
+    obtenerUsuariosComunidad,
+    obtenerDetalleComunidad,
+    cambiarNombreComunidad,
+    regenerarCodigoInvitacion
+};
