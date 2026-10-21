@@ -291,3 +291,13 @@ export const contarPendientes = () => {
     return 0;
   }
 };
+// Borra todas las alcancías guardadas en el teléfono (al cerrar sesión o al cambiar de cuenta).
+// Así los pendientes de una cuenta nunca se suben con la sesión de otra persona.
+export const borrarDatosLocales = () => {
+  try {
+    db.runSync('DELETE FROM alcancias');
+    console.log('Datos locales borrados');
+  } catch (error) {
+    console.error('❌ Error al borrar datos locales:', error);
+  }
+};

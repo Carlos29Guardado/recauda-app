@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
+import { sincronizarPendientes } from '../hooks/useSincronizacion';
 
 export default function MenuPrincipalScreen() {
   const [usuario, setUsuario] = useState<any>(null);
@@ -31,16 +33,24 @@ export default function MenuPrincipalScreen() {
   }, []);
 
   const manejarCerrarSesion = async () => {
+    // Antes de salir intentamos subir lo pendiente (si no hay red, regresa de inmediato)
+    await sincronizarPendientes();
+    const pendientes = contarPendientes();
+
     Alert.alert(
       'Cerrar Sesión',
-      '¿Estás seguro de que quieres salir?',
+      pendientes > 0
+        ? `Tienes ${pendientes} ${pendientes === 1 ? 'cambio' : 'cambios'} sin subir al servidor. Si cierras sesión ahora se borrarán de este teléfono y se perderán.\n\nConéctate a internet y espera a que se suban antes de salir.`
+        : '¿Estás seguro de que quieres salir?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Si, salir',
+          text: pendientes > 0 ? 'Salir y borrar' : 'Si, salir',
           style: 'destructive',
           onPress: async () => {
             try {
+              // Se borran los datos locales para que otra cuenta no suba los de esta
+              borrarDatosLocales();
               await AsyncStorage.removeItem('userData');
               await AsyncStorage.removeItem('userToken');
               setModalVisible(false);
