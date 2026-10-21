@@ -6,6 +6,7 @@ import {
     marcarComoSincronizadas,
     obtenerActualizacionesPendientes,
     marcarActualizacionSincronizada,
+    marcarConflictos,
     contarPendientes
 } from '../../database/sqlite';
 import { fetchApi } from '../services/api';
@@ -16,7 +17,7 @@ let sincronizando = false;
 // Sube al servidor las alcancías nuevas y los cambios guardados offline.
 // Devuelve cuántas se subieron y cuántas quedan pendientes.
 export const sincronizarPendientes = async () => {
-    const resultado = { insertadas: 0, actualizadas: 0, pendientes: contarPendientes() };
+    const resultado = { insertadas: 0, actualizadas: 0, conflictos: [], pendientes: contarPendientes() };
 
     //Si el candado está cerrado o no hay nada que subir, no hacemos nada
     if (sincronizando || resultado.pendientes === 0) return resultado;
@@ -37,8 +38,25 @@ export const sincronizarPendientes = async () => {
                 body: JSON.stringify({ alcancias: nuevas })
             });
             if (respuesta.ok) {
-                marcarComoSincronizadas(nuevas.map((a) => a.local_id));
-                resultado.insertadas = nuevas.length;
+                const datos = await respuesta.json().catch(() => ({}));
+
+                // Las que el servidor no aceptó (número repetido o fuera de rango) quedan en 'conflict'
+                // para que el colaborador corrija el número; las demás se marcan como subidas
+                const conflictos = Array.isArray(datos.conflictos) ? datos.conflictos : [];
+                const idsConflicto = new Set(conflictos.map((c) => c.local_id));
+                marcarConflictos([...idsConflicto]);
+                marcarComoSincronizadas(nuevas.map((a) => a.local_id).filter((id) => !idsConflicto.has(id)));
+
+                resultado.insertadas = nuevas.length - idsConflicto.size;
+                resultado.conflictos = conflictos;
+
+                if (conflictos.length > 0) {
+                    Alert.alert(
+                        'Números de alcancía por revisar',
+                        conflictos.map((c) => `• ${c.mensaje}`).join('\n') +
+                        '\n\nRevisa el número impreso en la alcancía y corrígelo desde la Lista de Alcancías (aparece marcada como "Número repetido").'
+                    );
+                }
             }
         }
 

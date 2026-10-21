@@ -31,17 +31,29 @@ export default function ListaAlcanciasScreen() {
           params: { 
             codigo_alcancia: item.codigo_alcancia,
             nombre_persona: item.nombre_persona,
-            estado_actual: estado.texto, 
-            monto_actual: item.monto_entregado ? item.monto_entregado.toString() : ''
+            estado_actual: estado.texto,
+            monto_actual: item.monto_entregado ? item.monto_entregado.toString() : '',
+            // Para poder corregir el número si quedó repetido al sincronizar
+            local_id: item.local_id,
+            sync_status: item.sync_status
           }
         })}
-      
-      
+
+
       >
-        
+
         {/* Fila superior: Código y Estado */}
         <View style={styles.tarjetaHeader}>
-          <Text style={styles.numeroTexto}>#{item.codigo_alcancia}</Text>
+          <View style={styles.filaNumero}>
+            <Text style={styles.numeroTexto}>#{item.codigo_alcancia}</Text>
+            {/* El servidor no aceptó este número: hay que corregirlo */}
+            {item.sync_status === 'conflict' && (
+              <View style={styles.badgeConflicto}>
+                <Ionicons name="alert-circle-outline" size={14} color="#C06C6C" />
+                <Text style={styles.textoConflicto}>Número repetido</Text>
+              </View>
+            )}
+          </View>
           <View style={[styles.badgeEstado, { backgroundColor: estado.fondo }]}>
             <Text style={[styles.textoEstado, { color: estado.color }]}>{estado.texto}</Text>
           </View>
@@ -195,6 +207,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 2,
+  },
+  filaNumero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  badgeConflicto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(192, 108, 108, 0.2)',
+  },
+  textoConflicto: {
+    color: '#C06C6C',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   nombreTexto: {
     color: '#FFFFFF',
