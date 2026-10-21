@@ -6,7 +6,9 @@ const {
     obtenerUsuariosComunidad,
     obtenerDetalleComunidad,
     cambiarNombreComunidad,
-    regenerarCodigoInvitacion
+    regenerarCodigoInvitacion,
+    obtenerEstadoComunidad,
+    cambiarEstadoComunidad
 } = require('../controllers/comunidadController');
 const { verificarToken } = require('../middlewares/verificarToken');
 const { verificarComunidad, soloAdmin } = require('../middlewares/verificarComunidad');
@@ -19,5 +21,9 @@ router.get('/usuarios', verificarToken, obtenerUsuariosComunidad);
 router.get('/detalle', verificarToken, verificarComunidad, soloAdmin, obtenerDetalleComunidad);
 router.put('/nombre', verificarToken, verificarComunidad, soloAdmin, cambiarNombreComunidad);
 router.post('/codigo', verificarToken, verificarComunidad, soloAdmin, regenerarCodigoInvitacion);
+
+// Estado de la campaña: cualquier miembro lo consulta; solo el admin cierra o reabre
+router.get('/estado', verificarToken, verificarComunidad, obtenerEstadoComunidad);
+router.put('/estado', verificarToken, verificarComunidad, soloAdmin, cambiarEstadoComunidad);
 
 module.exports = router;

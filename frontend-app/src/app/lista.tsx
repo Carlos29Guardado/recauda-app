@@ -14,7 +14,8 @@ export default function ListaAlcanciasScreen() {
     refrescando,
     onRefresh,
     ejecutarBusqueda,
-    obtenerInfoEstado
+    obtenerInfoEstado,
+    comunidadActiva
   } = useListaAlcancias();
 
   // El diseño de cada tarjeta individual de la lista
@@ -87,6 +88,13 @@ export default function ListaAlcanciasScreen() {
         <Text style={styles.tituloHeader}>Lista de Alcancías</Text>
         <View style={{ width: 28 }} />
       </View>
+      {/* Comunidad cerrada: la campaña terminó y la lista es solo de consulta */}
+      {!comunidadActiva && (
+        <View style={styles.avisoCerrada}>
+          <Ionicons name="lock-closed-outline" size={18} color="#E0B15C" />
+          <Text style={styles.textoAvisoCerrada}>Comunidad cerrada: la campaña terminó, solo consulta.</Text>
+        </View>
+      )}
       {/* Barra de Búsqueda */}
     <TextInput
       style={styles.buscador}
@@ -207,6 +215,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 2,
+  },
+  avisoCerrada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(224, 177, 92, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(224, 177, 92, 0.4)',
+  },
+  textoAvisoCerrada: {
+    color: '#E0B15C',
+    fontSize: 14,
+    flex: 1,
   },
   filaNumero: {
     flexDirection: 'row',

@@ -14,6 +14,8 @@ export default function AdministrarComunidadScreen() {
     error,
     guardandoNombre,
     regenerando,
+    cambiandoEstado,
+    cambiarEstado,
     guardarNombre,
     compartirCodigo,
     regenerarCodigo,
@@ -118,6 +120,50 @@ export default function AdministrarComunidadScreen() {
               <Text style={styles.etiquetaDato}>Miembros</Text>
               <Text style={styles.valorDato}>{comunidad?.total_miembros}</Text>
             </View>
+          </View>
+
+          {/* Estado de la campaña: cerrar la comunidad cuando termina (solo consulta) o reabrirla */}
+          <View style={[styles.tarjeta, !comunidad?.activa && styles.tarjetaCerrada]}>
+            <Text style={styles.tituloTarjeta}>Estado de la campaña</Text>
+            <View style={styles.filaEstado}>
+              <Ionicons
+                name={comunidad?.activa ? 'radio-button-on' : 'lock-closed'}
+                size={18}
+                color={comunidad?.activa ? '#8FBC8F' : '#E0B15C'}
+              />
+              <Text style={[styles.textoEstado, { color: comunidad?.activa ? '#8FBC8F' : '#E0B15C' }]}>
+                {comunidad?.activa
+                  ? 'Activa'
+                  : `Cerrada${comunidad?.fecha_cierre ? ` el ${new Date(comunidad.fecha_cierre).toLocaleDateString('es')}` : ''}`}
+              </Text>
+            </View>
+            <Text style={styles.descripcion}>
+              {comunidad?.activa
+                ? 'Cuando la campaña termine (alcancías entregadas, recogidas y contadas), cierra la comunidad para guardar los datos como solo consulta.'
+                : 'Nadie puede registrar ni editar alcancías ni unirse con el código. Los datos se conservan para consulta.'}
+            </Text>
+            <TouchableOpacity
+              style={[
+                comunidad?.activa ? styles.botonPeligro : styles.botonSecundario,
+                cambiandoEstado && styles.botonDeshabilitado
+              ]}
+              onPress={() => cambiarEstado(!comunidad?.activa)}
+              disabled={cambiandoEstado}
+            >
+              {cambiandoEstado ? (
+                <ActivityIndicator color={comunidad?.activa ? '#C06C6C' : '#C2DFE3'} />
+              ) : comunidad?.activa ? (
+                <>
+                  <Ionicons name="lock-closed-outline" size={20} color="#C06C6C" />
+                  <Text style={styles.textoBotonPeligro}>Cerrar comunidad</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="lock-open-outline" size={20} color="#C2DFE3" />
+                  <Text style={styles.textoBotonSecundario}>Reabrir comunidad</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
 
         </ScrollView>
@@ -244,6 +290,34 @@ const styles = StyleSheet.create({
   },
   textoBotonSecundario: {
     color: '#C2DFE3',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tarjetaCerrada: {
+    borderColor: 'rgba(224, 177, 92, 0.5)',
+  },
+  filaEstado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  textoEstado: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  botonPeligro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#C06C6C',
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  textoBotonPeligro: {
+    color: '#C06C6C',
     fontSize: 15,
     fontWeight: '600',
   },

@@ -14,6 +14,13 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/alcancias', require('./routes/alcanciaRoutes'));
 app.use('/api/comunidad', require('./routes/comunidadRoutes'));
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
-});
+// Primero se aplican las migraciones; si fallan se registra el error y el servidor arranca igual
+const { ejecutarMigraciones } = require('./config/migraciones');
+
+ejecutarMigraciones()
+  .catch((error) => console.error('Error al aplicar migraciones:', error))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor corriendo en el puerto ${PORT}`);
+    });
+  });

@@ -42,7 +42,8 @@ const loginManual = async (req, res) => {
              c.nombre AS comunidad_nombre, 
              c.codigo_invitacion AS comunidad_codigo,
              c.rango_inicio,
-             c.rango_fin
+             c.rango_fin,
+             c.activa AS comunidad_activa
       FROM usuarios u
       LEFT JOIN comunidades c ON u.comunidad_id = c.id
       WHERE u.email = $1
@@ -77,7 +78,8 @@ const loginManual = async (req, res) => {
                 comunidad_nombre: usuario.comunidad_nombre,
                 comunidad_codigo: usuario.comunidad_codigo,
                 rango_inicio: usuario.rango_inicio,
-                rango_fin: usuario.rango_fin
+                rango_fin: usuario.rango_fin,
+                comunidad_activa: usuario.comunidad_activa
             }
         });
     } catch (error) {
@@ -104,7 +106,8 @@ const loginGoogle = async (req, res) => {
              c.nombre AS comunidad_nombre, 
              c.codigo_invitacion AS comunidad_codigo,
              c.rango_inicio,
-             c.rango_fin
+             c.rango_fin,
+             c.activa AS comunidad_activa
       FROM usuarios u
       LEFT JOIN comunidades c ON u.comunidad_id = c.id
       WHERE u.email = $1
@@ -140,7 +143,8 @@ const loginGoogle = async (req, res) => {
                 comunidad_nombre: usuario.comunidad_nombre,
                 comunidad_codigo: usuario.comunidad_codigo,
                 rango_inicio: usuario.rango_inicio,
-                rango_fin: usuario.rango_fin
+                rango_fin: usuario.rango_fin,
+                comunidad_activa: usuario.comunidad_activa
             }
         });
 

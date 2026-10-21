@@ -40,7 +40,7 @@ const unirseComunidad = async (req, res) => {
     try {
         // Buscar la comunidad por código
         const resultComunidad = await pool.query(
-            'SELECT id, nombre FROM comunidades WHERE codigo_invitacion = $1',
+            'SELECT id, nombre, activa FROM comunidades WHERE codigo_invitacion = $1',
             [codigo_invitacion]
         );
 
@@ -49,6 +49,11 @@ const unirseComunidad = async (req, res) => {
         }
 
         const comunidadEncontrada = resultComunidad.rows[0];
+
+        // A una comunidad cerrada ya no se puede unir nadie
+        if (comunidadEncontrada.activa === false) {
+            return res.status(403).json({ mensaje: 'Esta comunidad está cerrada: su campaña ya terminó.' });
+        }
 
         // Asignar el usuario a la comunidad como colaborador
         await pool.query(
@@ -117,7 +122,7 @@ const generarCodigoUnico = async () => {
 const obtenerDetalleComunidad = async (req, res) => {
     try {
         const { rows } = await pool.query(
-            `SELECT c.id, c.nombre, c.codigo_invitacion, c.rango_inicio, c.rango_fin,
+            `SELECT c.id, c.nombre, c.codigo_invitacion, c.rango_inicio, c.rango_fin, c.activa, c.fecha_cierre,
                     (SELECT COUNT(*) FROM usuarios u WHERE u.comunidad_id = c.id) AS total_miembros,
                     (SELECT COUNT(*) FROM alcancias a WHERE a.comunidad_id = c.id) AS total_alcancias
              FROM comunidades c
@@ -137,7 +142,9 @@ const obtenerDetalleComunidad = async (req, res) => {
             rango_inicio: c.rango_inicio,
             rango_fin: c.rango_fin,
             total_miembros: Number(c.total_miembros),
-            total_alcancias: Number(c.total_alcancias)
+            total_alcancias: Number(c.total_alcancias),
+            activa: c.activa !== false,
+            fecha_cierre: c.fecha_cierre
         });
     } catch (error) {
         console.error('Error al obtener detalle de la comunidad:', error);
@@ -180,7 +187,40 @@ const regenerarCodigoInvitacion = async (req, res) => {
     }
 };
 
+// Estado de la comunidad para cualquier miembro: la app lo usa para saber si está cerrada
+const obtenerEstadoComunidad = (req, res) => {
+    res.status(200).json({ activa: req.comunidadActiva });
+};
+
+// Cierra (campaña finalizada) o reabre la comunidad (solo admin)
+const cambiarEstadoComunidad = async (req, res) => {
+    if (typeof req.body.activa !== 'boolean') {
+        return res.status(400).json({ mensaje: 'Indica si la comunidad queda activa (true) o cerrada (false).' });
+    }
+    const activa = req.body.activa;
+
+    try {
+        const { rows } = await pool.query(
+            `UPDATE comunidades
+             SET activa = $1, fecha_cierre = CASE WHEN $1 THEN NULL ELSE NOW() END
+             WHERE id = $2
+             RETURNING activa, fecha_cierre`,
+            [activa, req.comunidadId]
+        );
+        res.status(200).json({
+            mensaje: activa ? 'Comunidad reabierta' : 'Comunidad cerrada',
+            activa: rows[0].activa,
+            fecha_cierre: rows[0].fecha_cierre
+        });
+    } catch (error) {
+        console.error('Error al cambiar el estado de la comunidad:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    }
+};
+
 module.exports = {
+    obtenerEstadoComunidad,
+    cambiarEstadoComunidad,
     crearComunidad,
     unirseComunidad,
     obtenerUsuariosComunidad,
