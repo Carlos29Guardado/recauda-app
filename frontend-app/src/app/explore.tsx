@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, TouchableWithoutFeedback } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
@@ -11,7 +11,8 @@ export default function MenuPrincipalScreen() {
   const [cargando, setCargando] = useState(true);
   const [modalVisible, setModalVisible] = useState(false); // Agregado para controlar el modal
 
-  useEffect(() => {
+  // Se vuelve a leer la sesión cada vez que se regresa al menú (por ejemplo, tras cambiar el nombre de la comunidad)
+  useFocusEffect(useCallback(() => {
     const cargarSesion = async () => {
       try {
         const usuarioString = await AsyncStorage.getItem('userData');
@@ -30,7 +31,7 @@ export default function MenuPrincipalScreen() {
     };
 
     cargarSesion();
-  }, []);
+  }, []));
 
   const manejarCerrarSesion = async () => {
     // Antes de salir intentamos subir lo pendiente (si no hay red, regresa de inmediato)
@@ -186,21 +187,25 @@ export default function MenuPrincipalScreen() {
               <Text style={styles.modalRol}>
                 {usuario?.rol === 'admin' ? 'Administrador' : 'Colaborador'}
               </Text>
-              {/* ¡NUEVO BLOQUE AQUÍ! Solo lo ve el admin */}
-              {usuario?.rol === 'admin' && usuario?.comunidad_codigo && (
-                <View style={{ marginTop: 15, alignItems: 'center' }}>
-                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 5 }}>
-                    Código de invitación:
-                  </Text>
-                  <View style={{ backgroundColor: '#DDF0F2', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10 }}>
-                    <Text style={{ color: '#2A363B', fontSize: 18, fontWeight: 'bold', letterSpacing: 2 }}>
-                      {usuario.comunidad_codigo}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
               <View style={{ width: '100%', marginTop: 10 }}>
+                {/* Solo el administrador: nombre, código de invitación y resumen de la comunidad */}
+                {usuario?.rol === 'admin' && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.botonAccion}
+                      onPress={() => {
+                        setModalVisible(false);
+                        router.push('/administrar_comunidad' as any);
+                      }}
+                    >
+                      <Ionicons name="settings-outline" size={24} color="#C2DFE3" />
+                      <Text style={[styles.textoBotonAccion, { color: '#C2DFE3' }]}>Administrar Comunidad</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.separador} />
+                  </>
+                )}
+
                 <TouchableOpacity style={styles.botonAccion} onPress={manejarSalirComunidad}>
                   <Ionicons name="exit-outline" size={24} color="#C06C6C" />
                   <Text style={[styles.textoBotonAccion, { color: '#C06C6C' }]}>Abandonar Comunidad</Text>

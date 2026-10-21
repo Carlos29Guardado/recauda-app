@@ -23,4 +23,12 @@ const verificarComunidad = async (req, res, next) => {
     }
 };
 
-module.exports = { verificarComunidad };
+// Usar después de verificarComunidad: solo deja pasar al administrador actual de la comunidad
+const soloAdmin = (req, res, next) => {
+    if (req.rolActual !== 'admin') {
+        return res.status(403).json({ mensaje: 'Solo el administrador puede hacer esto.' });
+    }
+    next();
+};
+
+module.exports = { verificarComunidad, soloAdmin };
