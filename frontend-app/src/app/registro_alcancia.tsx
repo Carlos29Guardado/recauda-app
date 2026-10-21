@@ -8,7 +8,7 @@ export default function RegistrarAlcanciaScreen() {
 
   const opcionesEstado = ['Colocada', 'Devuelta', 'Faltante'];
   const {
-    numeroAlcancia, setNumeroAlcancia,
+    numeroAlcancia,
     rangoInicio,
     rangoFin,
     nombrePersona, setNombrePersona,
@@ -44,20 +44,15 @@ export default function RegistrarAlcanciaScreen() {
       <ScrollView style={styles.formContainer}>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Número de Alcancía</Text>
-          {/* Se sugiere el siguiente número, pero se escribe el que trae impreso la alcancía física */}
+          <Text style={styles.label}>Número de Alcancía (Automático)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, styles.inputBloqueado]}
             value={numeroAlcancia}
-            onChangeText={(texto) => setNumeroAlcancia(texto.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
-            placeholder="Número impreso en la alcancía"
-            placeholderTextColor="#7A8C91"
+            editable={false} // Bloquea la edición: se calcula con el rango de la comunidad
           />
-          <Text style={styles.ayuda}>
-            Revisa que coincida con el número impreso en la alcancía
-            {rangoInicio != null && rangoFin != null ? ` (tu comunidad: ${rangoInicio} a ${rangoFin})` : ''}.
-          </Text>
+          {rangoInicio != null && rangoFin != null && (
+            <Text style={styles.ayuda}>Rango de tu comunidad: {rangoInicio} a {rangoFin}</Text>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
