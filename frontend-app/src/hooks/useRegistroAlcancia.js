@@ -6,6 +6,7 @@ import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../databas
 
 export const useRegistroAlcancia = () => {
     const [numeroAlcancia, setNumeroAlcancia] = useState('');
+    const [rangoInicio, setRangoInicio] = useState(null);
     const [rangoFin, setRangoFin] = useState(null);
     const [cargandoInicial, setCargandoInicial] = useState(true);
 
@@ -25,24 +26,37 @@ export const useRegistroAlcancia = () => {
                 if (!usuarioString) return;
 
                 const usuario = JSON.parse(usuarioString);
-                const rangoInicio = usuario.rango_inicio || 1;
+                const inicioSector = usuario.rango_inicio || 1;
 
-                if (usuario.rango_fin) {
-                    setRangoFin(usuario.rango_fin); 
-                }
+                if (usuario.rango_inicio) setRangoInicio(Number(usuario.rango_inicio));
+                if (usuario.rango_fin) setRangoFin(Number(usuario.rango_fin));
 
-                const siguienteLocal = obtenerSiguienteCodigoLocal(usuario.comunidad_id, rangoInicio);
+                const siguienteLocal = obtenerSiguienteCodigoLocal(usuario.comunidad_id, inicioSector);
 
                 try {
                     const respuesta = await fetchApi(`/alcancias/siguiente/${usuario.comunidad_id}`, {}, 8000);
                     if (respuesta.ok) {
                         const data = await respuesta.json();
 
-                        const siguienteServer = data.siguiente_codigo;
-                        const numeroFinal = Math.max(siguienteServer, siguienteLocal);
+                        // Guardamos el rango en la sesión para poder validar el número sin conexión
+                        // (al crear o unirse a una comunidad el rango no se guarda hasta el siguiente login)
+                        if (data.rango_inicio != null && data.rango_fin != null) {
+                            setRangoInicio(Number(data.rango_inicio));
+                            setRangoFin(Number(data.rango_fin));
+                            await AsyncStorage.setItem('userData', JSON.stringify({
+                                ...usuario,
+                                rango_inicio: data.rango_inicio,
+                                rango_fin: data.rango_fin
+                            }));
+                        }
 
-                        setNumeroAlcancia(numeroFinal.toString());
-                        if (data.rango_fin) setRangoFin(data.rango_fin);
+                        if (data.limite_alcanzado) {
+                            // Ya no quedan números sugeridos; el colaborador escribe el de la alcancía
+                            setNumeroAlcancia('');
+                        } else {
+                            const numeroFinal = Math.max(data.siguiente_codigo, siguienteLocal);
+                            setNumeroAlcancia(numeroFinal.toString());
+                        }
                     } else {
                         setNumeroAlcancia(siguienteLocal.toString());
                     }
@@ -73,8 +87,22 @@ export const useRegistroAlcancia = () => {
 
       const usuario = JSON.parse(usuarioString);
 
+      // El número es el que trae impreso la alcancía física: debe estar en el rango de la comunidad
+      const codigo = Number(numeroAlcancia);
+      if (!numeroAlcancia || !Number.isInteger(codigo)) {
+        Alert.alert('Número inválido', 'Escribe el número que trae impreso la alcancía.');
+        return;
+      }
+      if (rangoInicio != null && rangoFin != null && (codigo < rangoInicio || codigo > rangoFin)) {
+        Alert.alert(
+          'Fuera de rango',
+          `El número ${codigo} no pertenece a tu comunidad. Las alcancías de tu comunidad van de la ${rangoInicio} a la ${rangoFin}.`
+        );
+        return;
+      }
+
       const payload = {
-        codigo_alcancia: parseInt(numeroAlcancia, 10),
+        codigo_alcancia: codigo,
         nombre_persona: nombrePersona,
         comunidad_id: usuario.comunidad_id,
         usuario_id: usuario.id,
@@ -96,8 +124,9 @@ export const useRegistroAlcancia = () => {
               setNombrePersona('');
               setMonto('');
               setEstado('Colocada');
-              const siguienteNumero = parseInt(numeroAlcancia, 10) + 1;
-              setNumeroAlcancia(siguienteNumero.toString());
+              // Sugerimos el siguiente número, sin pasarnos del rango
+              const siguienteNumero = codigo + 1;
+              setNumeroAlcancia(rangoFin != null && siguienteNumero > rangoFin ? '' : siguienteNumero.toString());
             }
           }]
         );
@@ -114,7 +143,9 @@ export const useRegistroAlcancia = () => {
   };
 
     return {
-        numeroAlcancia,
+        numeroAlcancia, setNumeroAlcancia,
+        rangoInicio,
+        rangoFin,
         nombrePersona, setNombrePersona,
         monto, setMonto,
         estado, setEstado,

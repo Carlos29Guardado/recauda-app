@@ -102,7 +102,8 @@ const obtenerSiguienteAlcancia = async (req, res) => {
       return res.json({ 
         limite_alcanzado: true, 
         mensaje: 'Se ha alcanzado el límite de alcancías para este sector.',
-        rango_fin 
+        rango_inicio,
+        rango_fin
       });
     }
 
@@ -110,6 +111,7 @@ const obtenerSiguienteAlcancia = async (req, res) => {
     res.json({
       limite_alcanzado: false,
       siguiente_codigo: siguienteCodigo,
+      rango_inicio,
       rango_fin: rango_fin
     });
 
@@ -134,7 +136,14 @@ const sincronizarAlcanciasOffline = async (req, res) => {
     let insertadas = 0;
     let omitidas = 0;
     let rechazadas = 0;
+    // Alcancías que el teléfono NO debe marcar como subidas: número repetido o fuera de rango
+    const conflictos = [];
     const anioActual = new Date().getFullYear();
+
+    const { rows: [rango] } = await client.query(
+      'SELECT rango_inicio, rango_fin FROM comunidades WHERE id = $1',
+      [req.comunidadId]
+    );
 
     await client.query('BEGIN');
 
@@ -145,7 +154,19 @@ const sincronizarAlcanciasOffline = async (req, res) => {
         continue;
       }
 
-      // Si la alcancía ya existe (reintento de un envío anterior) no se vuelve a insertar
+      const codigo = Number(alcancia.codigo_alcancia);
+      if (rango && rango.rango_inicio != null && rango.rango_fin != null &&
+          (codigo < Number(rango.rango_inicio) || codigo > Number(rango.rango_fin))) {
+        conflictos.push({
+          local_id: alcancia.local_id,
+          codigo_alcancia: codigo,
+          motivo: 'fuera_de_rango',
+          mensaje: `El número ${codigo} no está en el rango de la comunidad (${rango.rango_inicio} a ${rango.rango_fin}).`
+        });
+        continue;
+      }
+
+      // Si la alcancía ya existe no se vuelve a insertar
       const resultado = await client.query(
                 `INSERT INTO alcancias
                 (codigo_alcancia, nombre_persona, comunidad_id, usuario_id, colocada, devuelta, faltante, monto_entregado, anio)
@@ -165,8 +186,33 @@ const sincronizarAlcanciasOffline = async (req, res) => {
                     alcancia.anio || anioActual
                 ]
             );
-      if (resultado.rowCount === 1) insertadas++;
-      else omitidas++;
+      if (resultado.rowCount === 1) {
+        insertadas++;
+        continue;
+      }
+
+      // Ya existía: ¿es un reintento del mismo registro o lo registró otra persona?
+      const { rows: [existente] } = await client.query(
+        `SELECT a.usuario_id, a.nombre_persona, u.nombre AS registrada_por
+         FROM alcancias a LEFT JOIN usuarios u ON u.id = a.usuario_id
+         WHERE a.codigo_alcancia = $1 AND a.comunidad_id = $2`,
+        [codigo, req.comunidadId]
+      );
+
+      const esReintento = existente &&
+        Number(existente.usuario_id) === Number(req.usuario.id) &&
+        existente.nombre_persona === alcancia.nombre_persona;
+
+      if (esReintento) {
+        omitidas++;
+      } else {
+        conflictos.push({
+          local_id: alcancia.local_id,
+          codigo_alcancia: codigo,
+          motivo: 'repetido',
+          mensaje: `La alcancía #${codigo} ya fue registrada${existente?.registrada_por ? ` por ${existente.registrada_por}` : ''} a nombre de ${existente?.nombre_persona || 'otra persona'}.`
+        });
+      }
     }
 
     await client.query('COMMIT');
@@ -174,7 +220,8 @@ const sincronizarAlcanciasOffline = async (req, res) => {
       mensaje: 'Sincronización exitosa',
       total_sincronizadas: insertadas,
       total_omitidas: omitidas,
-      total_rechazadas: rechazadas
+      total_rechazadas: rechazadas,
+      conflictos
     });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});

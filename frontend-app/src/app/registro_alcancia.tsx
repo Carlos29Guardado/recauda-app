@@ -8,7 +8,9 @@ export default function RegistrarAlcanciaScreen() {
 
   const opcionesEstado = ['Colocada', 'Devuelta', 'Faltante'];
   const {
-    numeroAlcancia,
+    numeroAlcancia, setNumeroAlcancia,
+    rangoInicio,
+    rangoFin,
     nombrePersona, setNombrePersona,
     monto, setMonto,
     estado, setEstado,
@@ -42,12 +44,20 @@ export default function RegistrarAlcanciaScreen() {
       <ScrollView style={styles.formContainer}>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Número de Alcancía (Automático)</Text>
+          <Text style={styles.label}>Número de Alcancía</Text>
+          {/* Se sugiere el siguiente número, pero se escribe el que trae impreso la alcancía física */}
           <TextInput
-            style={[styles.input, styles.inputBloqueado]}
+            style={styles.input}
             value={numeroAlcancia}
-            editable={false} // Bloquea la edición
+            onChangeText={(texto) => setNumeroAlcancia(texto.replace(/[^0-9]/g, ''))}
+            keyboardType="number-pad"
+            placeholder="Número impreso en la alcancía"
+            placeholderTextColor="#7A8C91"
           />
+          <Text style={styles.ayuda}>
+            Revisa que coincida con el número impreso en la alcancía
+            {rangoInicio != null && rangoFin != null ? ` (tu comunidad: ${rangoInicio} a ${rangoFin})` : ''}.
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>
@@ -164,6 +174,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#3A4A50',
+  },
+  ayuda: {
+    color: '#9AA8AC',
+    fontSize: 12,
+    marginTop: 6,
+    marginLeft: 4,
   },
   inputBloqueado: {
     backgroundColor: '#182024', // Más oscuro para indicar que no se puede tocar

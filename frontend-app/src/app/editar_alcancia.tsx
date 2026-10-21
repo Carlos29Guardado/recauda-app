@@ -2,13 +2,18 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { actualizarAlcanciaLocal, tieneCambiosPendientes } from '../../database/sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflicto } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
 
-    const { codigo_alcancia, nombre_persona, estado_actual, monto_actual } = useLocalSearchParams();
+    const { codigo_alcancia, nombre_persona, estado_actual, monto_actual, local_id, sync_status } = useLocalSearchParams();
+
+    // Si el servidor rechazó el número (repetido o fuera de rango) se permite corregirlo
+    const enConflicto = sync_status === 'conflict';
+    const [numeroCorregido, setNumeroCorregido] = useState((codigo_alcancia as string) || '');
 
     const [monto, setMonto] = useState((monto_actual as string) || '');
     const [estado, setEstado] = useState((estado_actual as string) || 'Colocada');
@@ -32,8 +37,31 @@ export default function EditarAlcanciaScreen() {
                 monto_entregado: monto ? parseFloat(monto as string) : null,
             };
 
+            let codigo = Number(codigo_alcancia);
+
+            // 0. Si estaba en conflicto, primero se corrige el número
+            if (enConflicto) {
+                const nuevo = Number(numeroCorregido);
+                if (!numeroCorregido || !Number.isInteger(nuevo)) {
+                    Alert.alert('Número inválido', 'Escribe el número que trae impreso la alcancía.');
+                    return;
+                }
+                const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+                if (usuario.rango_inicio != null && usuario.rango_fin != null &&
+                    (nuevo < Number(usuario.rango_inicio) || nuevo > Number(usuario.rango_fin))) {
+                    Alert.alert('Fuera de rango', `Las alcancías de tu comunidad van de la ${usuario.rango_inicio} a la ${usuario.rango_fin}.`);
+                    return;
+                }
+                const correccion = corregirNumeroConflicto(local_id as string, nuevo);
+                if (!correccion.exito) {
+                    Alert.alert('Error', correccion.error || 'No se pudo corregir el número.');
+                    return;
+                }
+                codigo = nuevo;
+            }
+
             // 1. Guardamos primero en el teléfono, así el cambio no se pierde aunque no haya red
-            const resultadoLocal = actualizarAlcanciaLocal(Number(codigo_alcancia), payload);
+            const resultadoLocal = actualizarAlcanciaLocal(codigo, payload);
             if (!resultadoLocal.exito) {
                 Alert.alert('Error', resultadoLocal.error || 'No se pudo guardar el cambio en el teléfono.');
                 return;
@@ -41,13 +69,13 @@ export default function EditarAlcanciaScreen() {
 
             // 2. Si hay conexión, lo subimos de una vez para que lo vean los demás voluntarios
             await sincronizarPendientes();
-            const subida = !tieneCambiosPendientes(Number(codigo_alcancia));
+            const subida = !tieneCambiosPendientes(codigo);
 
             Alert.alert(
                 subida ? 'Actualizada' : 'Guardada sin conexión',
                 subida
-                    ? `La alcancía #${codigo_alcancia} ha sido actualizada correctamente.`
-                    : `La alcancía #${codigo_alcancia} se guardó en el teléfono y se subirá automáticamente cuando haya conexión.`,
+                    ? `La alcancía #${codigo} ha sido actualizada correctamente.`
+                    : `La alcancía #${codigo} se guardó en el teléfono y se subirá automáticamente cuando haya conexión.`,
                 [{ text: 'OK', onPress: () => router.back() }]
             );
         } catch (error) {
@@ -69,14 +97,28 @@ export default function EditarAlcanciaScreen() {
 
             <ScrollView style={styles.formContainer}>
 
-                {/* CAMPOS BLOQUEADOS (Solo lectura) */}
+                {/* CAMPOS BLOQUEADOS (Solo lectura), salvo el número si quedó en conflicto */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Número de Alcancía</Text>
-                    <TextInput
-                        style={styles.inputBloqueado}
-                        value={codigo_alcancia as string}
-                        editable={false}
-                    />
+                    {enConflicto ? (
+                        <>
+                            <TextInput
+                                style={styles.input}
+                                value={numeroCorregido}
+                                onChangeText={(texto) => setNumeroCorregido(texto.replace(/[^0-9]/g, ''))}
+                                keyboardType="number-pad"
+                            />
+                            <Text style={styles.avisoConflicto}>
+                                Este número ya lo registró otra persona o no es de tu comunidad. Revisa el número impreso en la alcancía y corrígelo.
+                            </Text>
+                        </>
+                    ) : (
+                        <TextInput
+                            style={styles.inputBloqueado}
+                            value={codigo_alcancia as string}
+                            editable={false}
+                        />
+                    )}
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -158,6 +200,7 @@ const styles = StyleSheet.create({
     input: { backgroundColor: '#1E292D', color: '#FFFFFF', borderRadius: 12, padding: 16, fontSize: 16, borderWidth: 1, borderColor: '#3A4A50' },
 
     inputBloqueado: { backgroundColor: '#182024', color: '#9AA8AC', borderRadius: 12, padding: 16, fontSize: 16, borderWidth: 1, borderColor: '#253237' },
+    avisoConflicto: { color: '#C06C6C', fontSize: 13, marginTop: 6, marginLeft: 4 },
     inputBloqueadoVisual: { backgroundColor: '#182024', color: '#7A8C91', borderColor: '#182024' },
 
     radioContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },

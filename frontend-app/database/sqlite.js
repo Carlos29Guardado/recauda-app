@@ -165,7 +165,8 @@ export const guardarAlcanciasServidor = (alcancias, comunidad_id) => {
 
       // Postgres puede mandar codigo_alcancia como texto; lo normalizamos a número para comparar
       const conCambiosSinSubir = db.getAllSync(
-        "SELECT codigo_alcancia FROM alcancias WHERE sync_status = 'pending_update'"
+        // 'conflict': número repetido que el colaborador debe corregir; no se sobrescribe con el del servidor
+        "SELECT codigo_alcancia FROM alcancias WHERE sync_status IN ('pending_update', 'conflict')"
       );
       const codigosConCambios = new Set(conCambiosSinSubir.map((p) => Number(p.codigo_alcancia)));
 
@@ -291,6 +292,7 @@ export const contarPendientes = () => {
     return 0;
   }
 };
+
 // Borra todas las alcancías guardadas en el teléfono (al cerrar sesión o al cambiar de cuenta).
 // Así los pendientes de una cuenta nunca se suben con la sesión de otra persona.
 export const borrarDatosLocales = () => {
@@ -299,5 +301,37 @@ export const borrarDatosLocales = () => {
     console.log('Datos locales borrados');
   } catch (error) {
     console.error('❌ Error al borrar datos locales:', error);
+  }
+};
+
+// Marca como 'conflict' las alcancías que el servidor no aceptó (número repetido o fuera de rango).
+// No se vuelven a enviar hasta que el colaborador corrija el número.
+export const marcarConflictos = (local_ids) => {
+  if (!local_ids || local_ids.length === 0) return;
+  try {
+    const marcadores = local_ids.map(() => '?').join(', ');
+    db.runSync(
+      `UPDATE alcancias SET sync_status = 'conflict' WHERE sync_status = 'pending_insert' AND local_id IN (${marcadores})`,
+      local_ids
+    );
+  } catch (error) {
+    console.error('❌ Error al marcar conflictos:', error);
+  }
+};
+
+// Corrige el número de una alcancía en conflicto y la deja lista para subirse otra vez
+export const corregirNumeroConflicto = (local_id, nuevoCodigo) => {
+  try {
+    db.runSync(
+      "UPDATE alcancias SET codigo_alcancia = ?, sync_status = 'pending_insert' WHERE local_id = ? AND sync_status = 'conflict'",
+      [nuevoCodigo, local_id]
+    );
+    return { exito: true };
+  } catch (error) {
+    console.error('❌ Error al corregir número en conflicto:', error);
+    if (String(error.message).includes('UNIQUE')) {
+      return { exito: false, error: `Ya existe una alcancía con el número ${nuevoCodigo} en este teléfono.` };
+    }
+    return { exito: false, error: error.message || 'Error desconocido' };
   }
 };
