@@ -51,7 +51,7 @@ export const useRegistroAlcancia = () => {
                         }
 
                         if (data.limite_alcanzado) {
-                            // Ya no quedan números sugeridos; el colaborador escribe el de la alcancía
+                            // Ya no quedan números en el rango de la comunidad
                             setNumeroAlcancia('');
                         } else {
                             const numeroFinal = Math.max(data.siguiente_codigo, siguienteLocal);
@@ -87,10 +87,10 @@ export const useRegistroAlcancia = () => {
 
       const usuario = JSON.parse(usuarioString);
 
-      // El número es el que trae impreso la alcancía física: debe estar en el rango de la comunidad
+      // El número se calcula automáticamente; si está vacío es que ya se usó todo el rango
       const codigo = Number(numeroAlcancia);
       if (!numeroAlcancia || !Number.isInteger(codigo)) {
-        Alert.alert('Número inválido', 'Escribe el número que trae impreso la alcancía.');
+        Alert.alert('Sin números disponibles', 'Ya se registraron todas las alcancías del rango de tu comunidad.');
         return;
       }
       if (rangoInicio != null && rangoFin != null && (codigo < rangoInicio || codigo > rangoFin)) {
@@ -143,7 +143,7 @@ export const useRegistroAlcancia = () => {
   };
 
     return {
-        numeroAlcancia, setNumeroAlcancia,
+        numeroAlcancia,
         rangoInicio,
         rangoFin,
         nombrePersona, setNombrePersona,

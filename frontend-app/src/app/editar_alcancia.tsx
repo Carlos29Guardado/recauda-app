@@ -3,17 +3,51 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflicto } from '../../database/sqlite';
+import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflicto, obtenerSiguienteCodigoLocal } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
+import { fetchApi } from '../services/api';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
 
     const { codigo_alcancia, nombre_persona, estado_actual, monto_actual, local_id, sync_status } = useLocalSearchParams();
 
-    // Si el servidor rechazó el número (repetido o fuera de rango) se permite corregirlo
+    // Si el servidor rechazó el número (otro colaborador ya lo usó) se le asigna uno nuevo automáticamente
     const enConflicto = sync_status === 'conflict';
     const [numeroCorregido, setNumeroCorregido] = useState((codigo_alcancia as string) || '');
+    const [asignandoNumero, setAsignandoNumero] = useState(false);
+
+    // Calcula el siguiente número libre de la comunidad (igual que al registrar): el mayor entre
+    // el que indica el servidor y el siguiente guardado en el teléfono. Necesita internet.
+    const asignarNuevoNumero = async () => {
+        setAsignandoNumero(true);
+        try {
+            const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+            const respuesta = await fetchApi(`/alcancias/siguiente/${usuario.comunidad_id}`, {}, 8000);
+            const data = await respuesta.json();
+
+            if (!respuesta.ok) {
+                Alert.alert('Error', data.error || 'No se pudo calcular el nuevo número.');
+                return;
+            }
+            if (data.limite_alcanzado) {
+                Alert.alert('Sin números disponibles', 'Ya se registraron todas las alcancías del rango de tu comunidad.');
+                return;
+            }
+
+            const siguienteLocal = obtenerSiguienteCodigoLocal(usuario.comunidad_id, data.rango_inicio);
+            const nuevo = Math.max(data.siguiente_codigo, siguienteLocal);
+            if (data.rango_fin != null && nuevo > Number(data.rango_fin)) {
+                Alert.alert('Sin números disponibles', 'Ya se registraron todas las alcancías del rango de tu comunidad.');
+                return;
+            }
+            setNumeroCorregido(String(nuevo));
+        } catch (error) {
+            Alert.alert('Sin conexión', 'Necesitas internet para asignar un nuevo número, así no se repite con el de otro colaborador.');
+        } finally {
+            setAsignandoNumero(false);
+        }
+    };
 
     const [monto, setMonto] = useState((monto_actual as string) || '');
     const [estado, setEstado] = useState((estado_actual as string) || 'Colocada');
@@ -42,14 +76,8 @@ export default function EditarAlcanciaScreen() {
             // 0. Si estaba en conflicto, primero se corrige el número
             if (enConflicto) {
                 const nuevo = Number(numeroCorregido);
-                if (!numeroCorregido || !Number.isInteger(nuevo)) {
-                    Alert.alert('Número inválido', 'Escribe el número que trae impreso la alcancía.');
-                    return;
-                }
-                const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
-                if (usuario.rango_inicio != null && usuario.rango_fin != null &&
-                    (nuevo < Number(usuario.rango_inicio) || nuevo > Number(usuario.rango_fin))) {
-                    Alert.alert('Fuera de rango', `Las alcancías de tu comunidad van de la ${usuario.rango_inicio} a la ${usuario.rango_fin}.`);
+                if (nuevo === Number(codigo_alcancia)) {
+                    Alert.alert('Número repetido', 'Primero toca "Asignar nuevo número" para darle un número que no esté usado.');
                     return;
                 }
                 const correccion = corregirNumeroConflicto(local_id as string, nuevo);
@@ -103,14 +131,26 @@ export default function EditarAlcanciaScreen() {
                     {enConflicto ? (
                         <>
                             <TextInput
-                                style={styles.input}
+                                style={styles.inputBloqueado}
                                 value={numeroCorregido}
-                                onChangeText={(texto) => setNumeroCorregido(texto.replace(/[^0-9]/g, ''))}
-                                keyboardType="number-pad"
+                                editable={false}
                             />
                             <Text style={styles.avisoConflicto}>
-                                Este número ya lo registró otra persona o no es de tu comunidad. Revisa el número impreso en la alcancía y corrígelo.
+                                {numeroCorregido === codigo_alcancia
+                                    ? 'Otro colaborador ya registró este número. Toca el botón para asignarle el siguiente número disponible.'
+                                    : `Se le asignará el número ${numeroCorregido}. Toca "Guardar Cambios" para confirmar.`}
                             </Text>
+                            <TouchableOpacity
+                                style={[styles.botonAsignar, asignandoNumero && { opacity: 0.7 }]}
+                                onPress={asignarNuevoNumero}
+                                disabled={asignandoNumero}
+                            >
+                                {asignandoNumero ? (
+                                    <ActivityIndicator color="#C2DFE3" />
+                                ) : (
+                                    <Text style={styles.textoBotonAsignar}>Asignar nuevo número</Text>
+                                )}
+                            </TouchableOpacity>
                         </>
                     ) : (
                         <TextInput
@@ -201,6 +241,8 @@ const styles = StyleSheet.create({
 
     inputBloqueado: { backgroundColor: '#182024', color: '#9AA8AC', borderRadius: 12, padding: 16, fontSize: 16, borderWidth: 1, borderColor: '#253237' },
     avisoConflicto: { color: '#C06C6C', fontSize: 13, marginTop: 6, marginLeft: 4 },
+    botonAsignar: { marginTop: 10, borderWidth: 1, borderColor: '#C2DFE3', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+    textoBotonAsignar: { color: '#C2DFE3', fontSize: 15, fontWeight: '600' },
     inputBloqueadoVisual: { backgroundColor: '#182024', color: '#7A8C91', borderColor: '#182024' },
 
     radioContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },

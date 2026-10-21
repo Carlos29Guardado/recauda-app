@@ -54,7 +54,7 @@ export const sincronizarPendientes = async () => {
                     Alert.alert(
                         'Números de alcancía por revisar',
                         conflictos.map((c) => `• ${c.mensaje}`).join('\n') +
-                        '\n\nRevisa el número impreso en la alcancía y corrígelo desde la Lista de Alcancías (aparece marcada como "Número repetido").'
+                        '\n\nEn la Lista de Alcancías aparece marcada como "Número repetido": ábrela y toca "Asignar nuevo número".'
                     );
                 }
             }
