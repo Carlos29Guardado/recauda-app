@@ -8,7 +8,9 @@ const {
     cambiarNombreComunidad,
     regenerarCodigoInvitacion,
     obtenerEstadoComunidad,
-    cambiarEstadoComunidad
+    cambiarEstadoComunidad,
+    abandonarComunidad,
+    transferirAdministracion
 } = require('../controllers/comunidadController');
 const { listarLotes, crearLote, eliminarLote, misLotes } = require('../controllers/loteController');
 const { verificarToken } = require('../middlewares/verificarToken');
@@ -32,5 +34,9 @@ router.get('/lotes', verificarToken, verificarComunidad, soloAdmin, listarLotes)
 router.post('/lotes', verificarToken, verificarComunidad, soloAdmin, crearLote);
 router.delete('/lotes/:id', verificarToken, verificarComunidad, soloAdmin, eliminarLote);
 router.get('/mis-lotes', verificarToken, verificarComunidad, misLotes);
+
+// Salir de la comunidad (cualquier miembro) y pasar la administración (solo admin)
+router.post('/abandonar', verificarToken, verificarComunidad, abandonarComunidad);
+router.put('/admin', verificarToken, verificarComunidad, soloAdmin, transferirAdministracion);
 
 module.exports = router;

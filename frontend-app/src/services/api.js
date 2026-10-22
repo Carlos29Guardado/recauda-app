@@ -39,6 +39,18 @@ export const guardarEstadoComunidad = async (activa) => {
     await AsyncStorage.setItem('userData', JSON.stringify({ ...JSON.parse(usuarioString), comunidad_activa: activa }));
 };
 
+// Quita de la sesión todo lo de la comunidad (al abandonarla). Se conservan los datos de la cuenta.
+export const quitarComunidadDeSesion = async () => {
+    const usuarioString = await AsyncStorage.getItem('userData');
+    if (!usuarioString) return;
+    const {
+        comunidad_id, comunidad_nombre, comunidad_codigo, rango_inicio, rango_fin,
+        comunidad_activa, usa_lotes, lotes, lotes_usados_servidor,
+        ...cuenta
+    } = JSON.parse(usuarioString);
+    await AsyncStorage.setItem('userData', JSON.stringify({ ...cuenta, rol: 'colaborador', comunidad_id: null }));
+};
+
 // La comunidad está activa salvo que se haya marcado explícitamente como cerrada
 export const comunidadEstaActiva = (usuario) => usuario?.comunidad_activa !== false;
 
