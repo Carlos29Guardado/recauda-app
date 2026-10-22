@@ -3,13 +3,17 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchApi, comunidadEstaActiva } from '../services/api';
 import { validarMonto } from '../services/validaciones';
-import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite'; 
+import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite';
+import { refrescarMisLotes, siguienteNumeroDelUsuario, numeroEnLotes, describirLotes } from '../services/lotes';
 
 export const useRegistroAlcancia = () => {
     const [numeroAlcancia, setNumeroAlcancia] = useState('');
     const [rangoInicio, setRangoInicio] = useState(null);
     const [rangoFin, setRangoFin] = useState(null);
     const [cargandoInicial, setCargandoInicial] = useState(true);
+    // Lotes: si la comunidad los usa, el número sale solo de los lotes asignados a este colaborador
+    const [modoLotes, setModoLotes] = useState(false);
+    const [lotes, setLotes] = useState([]);
 
     const [nombrePersona, setNombrePersona] = useState('');
     const [monto, setMonto] = useState('');
@@ -26,11 +30,23 @@ export const useRegistroAlcancia = () => {
                 const usuarioString = await AsyncStorage.getItem('userData');
                 if (!usuarioString) return;
 
-                const usuario = JSON.parse(usuarioString);
-                const inicioSector = usuario.rango_inicio || 1;
+                // Con internet se actualizan los lotes; sin internet se usan los guardados en la sesión
+                const usuario = (await refrescarMisLotes()) || JSON.parse(usuarioString);
 
                 if (usuario.rango_inicio) setRangoInicio(Number(usuario.rango_inicio));
                 if (usuario.rango_fin) setRangoFin(Number(usuario.rango_fin));
+
+                if (usuario.usa_lotes) {
+                    // El número libre más bajo de SUS lotes: nadie más usa esos números, así que no se repite
+                    setModoLotes(true);
+                    setLotes(usuario.lotes || []);
+                    const siguiente = siguienteNumeroDelUsuario(usuario);
+                    setNumeroAlcancia(siguiente != null ? String(siguiente) : '');
+                    return;
+                }
+
+                // Sin lotes: número automático de toda la comunidad (como antes)
+                const inicioSector = usuario.rango_inicio || 1;
 
                 const siguienteLocal = obtenerSiguienteCodigoLocal(usuario.comunidad_id, inicioSector);
 
@@ -93,6 +109,22 @@ export const useRegistroAlcancia = () => {
         return;
       }
 
+      // Con lotes: solo se registra dentro de los lotes asignados a este colaborador
+      if (usuario.usa_lotes) {
+        if (!usuario.lotes || usuario.lotes.length === 0) {
+          Alert.alert('Sin lote asignado', 'Pide al administrador que te asigne un lote de alcancías para poder registrar.');
+          return;
+        }
+        if (!numeroAlcancia) {
+          Alert.alert('Lote completo', `Ya usaste todos los números de tus lotes (${describirLotes(usuario.lotes)}). Pide al administrador un lote nuevo.`);
+          return;
+        }
+        if (!numeroEnLotes(Number(numeroAlcancia), usuario.lotes)) {
+          Alert.alert('Fuera de tu lote', `El número ${numeroAlcancia} no está en tus lotes (${describirLotes(usuario.lotes)}).`);
+          return;
+        }
+      }
+
       // El número se calcula automáticamente; si está vacío es que ya se usó todo el rango
       const codigo = Number(numeroAlcancia);
       if (!numeroAlcancia || !Number.isInteger(codigo)) {
@@ -143,6 +175,12 @@ export const useRegistroAlcancia = () => {
               setNombrePersona('');
               setMonto('');
               setEstado('Colocada');
+              if (usuario.usa_lotes) {
+                // Siguiente número libre de sus lotes (ya cuenta el que se acaba de guardar)
+                const siguiente = siguienteNumeroDelUsuario(usuario);
+                setNumeroAlcancia(siguiente != null ? String(siguiente) : '');
+                return;
+              }
               // Sugerimos el siguiente número, sin pasarnos del rango
               const siguienteNumero = codigo + 1;
               setNumeroAlcancia(rangoFin != null && siguienteNumero > rangoFin ? '' : siguienteNumero.toString());
@@ -165,6 +203,8 @@ export const useRegistroAlcancia = () => {
         numeroAlcancia,
         rangoInicio,
         rangoFin,
+        modoLotes,
+        lotes,
         nombrePersona, setNombrePersona,
         monto, setMonto,
         estado, setEstado,

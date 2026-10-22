@@ -7,6 +7,7 @@ import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflict
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
 import { fetchApi, comunidadEstaActiva } from '../services/api';
 import { validarMonto } from '../services/validaciones';
+import { siguienteNumeroDelUsuario } from '../services/lotes';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
@@ -24,6 +25,18 @@ export default function EditarAlcanciaScreen() {
         setAsignandoNumero(true);
         try {
             const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+
+            // Con lotes: el siguiente libre de SUS lotes (no necesita internet, nadie más usa esos números)
+            if (usuario.usa_lotes) {
+                const siguiente = siguienteNumeroDelUsuario(usuario);
+                if (siguiente == null) {
+                    Alert.alert('Lote completo', 'Ya usaste todos los números de tus lotes. Pide al administrador un lote nuevo.');
+                    return;
+                }
+                setNumeroCorregido(String(siguiente));
+                return;
+            }
+
             const respuesta = await fetchApi(`/alcancias/siguiente/${usuario.comunidad_id}`, {}, 8000);
             const data = await respuesta.json();
 

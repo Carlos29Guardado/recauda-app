@@ -10,6 +10,7 @@ const {
     obtenerEstadoComunidad,
     cambiarEstadoComunidad
 } = require('../controllers/comunidadController');
+const { listarLotes, crearLote, eliminarLote, misLotes } = require('../controllers/loteController');
 const { verificarToken } = require('../middlewares/verificarToken');
 const { verificarComunidad, soloAdmin } = require('../middlewares/verificarComunidad');
 
@@ -25,5 +26,11 @@ router.post('/codigo', verificarToken, verificarComunidad, soloAdmin, regenerarC
 // Estado de la campaña: cualquier miembro lo consulta; solo el admin cierra o reabre
 router.get('/estado', verificarToken, verificarComunidad, obtenerEstadoComunidad);
 router.put('/estado', verificarToken, verificarComunidad, soloAdmin, cambiarEstadoComunidad);
+
+// Lotes por colaborador: el admin los asigna; cada miembro consulta los suyos
+router.get('/lotes', verificarToken, verificarComunidad, soloAdmin, listarLotes);
+router.post('/lotes', verificarToken, verificarComunidad, soloAdmin, crearLote);
+router.delete('/lotes/:id', verificarToken, verificarComunidad, soloAdmin, eliminarLote);
+router.get('/mis-lotes', verificarToken, verificarComunidad, misLotes);
 
 module.exports = router;
