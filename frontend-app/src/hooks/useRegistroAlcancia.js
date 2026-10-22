@@ -3,7 +3,8 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchApi, comunidadEstaActiva } from '../services/api';
 import { validarMonto } from '../services/validaciones';
-import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite';
+import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal, tieneCambiosPendientes } from '../../database/sqlite';
+import { sincronizarPendientes } from './useSincronizacion';
 import { refrescarMisLotes, siguienteNumeroDelUsuario, numeroEnLotes, describirLotes } from '../services/lotes';
 
 export const useRegistroAlcancia = () => {
@@ -166,9 +167,16 @@ export const useRegistroAlcancia = () => {
       const resultadoLocal = guardarAlcanciaLocal(payload);
 
       if (resultadoLocal && resultadoLocal.exito) {
+        // Si hay internet se sube de una vez, para que los demás la vean en su lista;
+        // si no, queda guardada en el teléfono y se sube sola al volver la conexión
+        await sincronizarPendientes();
+        const subida = !tieneCambiosPendientes(codigo);
+
         Alert.alert(
-          'Éxito',
-          `Alcancía #${numeroAlcancia} guardada localmente.`,
+          subida ? 'Registrada' : 'Guardada sin conexión',
+          subida
+            ? `Alcancía #${codigo} registrada y subida al servidor.`
+            : `Alcancía #${codigo} guardada en el teléfono. Se subirá automáticamente cuando haya conexión.`,
           [{
             text: 'Siguiente',
             onPress: () => {
