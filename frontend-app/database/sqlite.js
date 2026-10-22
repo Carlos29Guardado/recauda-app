@@ -335,3 +335,16 @@ export const corregirNumeroConflicto = (local_id, nuevoCodigo) => {
     return { exito: false, error: error.message || 'Error desconocido' };
   }
 };
+
+// Números de alcancía guardados en el teléfono para una comunidad (registrados aquí
+// o descargados del servidor). Sirve para no repetir números al trabajar con lotes.
+export const obtenerCodigosLocales = (comunidad_id) => {
+  try {
+    return db
+      .getAllSync('SELECT codigo_alcancia FROM alcancias WHERE comunidad_id = ?', [comunidad_id])
+      .map((fila) => Number(fila.codigo_alcancia));
+  } catch (error) {
+    console.error('❌ Error al obtener códigos locales:', error);
+    return [];
+  }
+};

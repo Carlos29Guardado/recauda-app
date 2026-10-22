@@ -122,6 +122,18 @@ export default function AdministrarComunidadScreen() {
             </View>
           </View>
 
+          {/* Lotes: qué números de alcancía se lleva cada colaborador */}
+          <View style={styles.tarjeta}>
+            <Text style={styles.tituloTarjeta}>Lotes por colaborador</Text>
+            <Text style={styles.descripcion}>
+              Asigna a cada colaborador los números de las alcancías que se lleva, para que nunca se repitan aunque registren sin internet.
+            </Text>
+            <TouchableOpacity style={styles.botonSecundario} onPress={() => router.push('/lotes' as any)}>
+              <Ionicons name="albums-outline" size={20} color="#C2DFE3" />
+              <Text style={styles.textoBotonSecundario}>Administrar lotes</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Estado de la campaña: cerrar la comunidad cuando termina (solo consulta) o reabrirla */}
           <View style={[styles.tarjeta, !comunidad?.activa && styles.tarjetaCerrada]}>
             <Text style={styles.tituloTarjeta}>Estado de la campaña</Text>

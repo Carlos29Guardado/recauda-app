@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
-import { useRegistroAlcancia } from '../hooks/useRegistroAlcancia'; // Ajusta la ruta 
+import { useRegistroAlcancia } from '../hooks/useRegistroAlcancia'; // Ajusta la ruta
+import { describirLotes } from '../services/lotes';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
@@ -11,6 +12,8 @@ export default function RegistrarAlcanciaScreen() {
     numeroAlcancia,
     rangoInicio,
     rangoFin,
+    modoLotes,
+    lotes,
     nombrePersona, setNombrePersona,
     monto, setMonto,
     estado, setEstado,
@@ -50,8 +53,18 @@ export default function RegistrarAlcanciaScreen() {
             value={numeroAlcancia}
             editable={false} // Bloquea la edición: se calcula con el rango de la comunidad
           />
-          {rangoInicio != null && rangoFin != null && (
-            <Text style={styles.ayuda}>Rango de tu comunidad: {rangoInicio} a {rangoFin}</Text>
+          {modoLotes ? (
+            lotes.length > 0 ? (
+              <Text style={styles.ayuda}>
+                {numeroAlcancia ? `Tus lotes: ${describirLotes(lotes)}` : `Ya usaste todos tus lotes (${describirLotes(lotes)}). Pide un lote nuevo al administrador.`}
+              </Text>
+            ) : (
+              <Text style={styles.avisoLote}>No tienes un lote asignado. Pide al administrador que te asigne uno para poder registrar.</Text>
+            )
+          ) : (
+            rangoInicio != null && rangoFin != null && (
+              <Text style={styles.ayuda}>Rango de tu comunidad: {rangoInicio} a {rangoFin}</Text>
+            )
           )}
         </View>
 
@@ -173,6 +186,12 @@ const styles = StyleSheet.create({
   ayuda: {
     color: '#9AA8AC',
     fontSize: 12,
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  avisoLote: {
+    color: '#C06C6C',
+    fontSize: 13,
     marginTop: 6,
     marginLeft: 4,
   },

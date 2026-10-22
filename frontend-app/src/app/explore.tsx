@@ -7,6 +7,7 @@ import * as Updates from 'expo-updates';
 import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
 import { comunidadEstaActiva, refrescarEstadoComunidad } from '../services/api';
+import { refrescarMisLotes } from '../services/lotes';
 
 export default function MenuPrincipalScreen() {
   const [usuario, setUsuario] = useState<any>(null);
@@ -27,6 +28,8 @@ export default function MenuPrincipalScreen() {
           if (usuarioParseado.comunidad_id) {
             const activa = await refrescarEstadoComunidad();
             if (activa !== null) setUsuario({ ...usuarioParseado, comunidad_activa: activa });
+            // También guardamos sus lotes, para poder registrar después aunque no haya señal
+            await refrescarMisLotes();
           }
         } else {
           console.log("El AsyncStorage está completamente vacío.");
