@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -98,22 +98,43 @@ export const sincronizarPendientes = async () => {
     return resultado;
 };
 
+// Cada cuánto se reintenta subir lo pendiente mientras la app está abierta
+const INTERVALO_REINTENTO_MS = 60000;
+
 export const useSincronizacionAutomatica = () => {
     useEffect(() => {
-        const unsubcribe = NetInfo.addEventListener(async (state) => {
-            //Si hay internet y si la señal es real
-            if (!state.isConnected || !state.isInternetReachable) return;
-
+        // Sube lo pendiente y avisa solo si de verdad se subió algo
+        const intentarSubir = async () => {
             const { insertadas, actualizadas } = await sincronizarPendientes();
             const total = insertadas + actualizadas;
 
             if (total > 0) {
                 Alert.alert(
                     'Sincronización automática',
-                    `Se detectó conexión y se subieron ${total} cambios que tenías guardados offline.`
+                    `Se subieron ${total} cambios que tenías guardados en el teléfono.`
                 );
             }
+        };
+
+        // 1. Cuando vuelve la conexión
+        const unsubcribe = NetInfo.addEventListener((state) => {
+            //Si hay internet y si la señal es real
+            if (!state.isConnected || !state.isInternetReachable) return;
+            intentarSubir();
         });
-        return () => unsubcribe();
+
+        // 2. Cuando el usuario regresa a la app (estaba en segundo plano)
+        const suscripcionApp = AppState.addEventListener('change', (estado) => {
+            if (estado === 'active') intentarSubir();
+        });
+
+        // 3. Cada minuto mientras la app está abierta: si no hay nada pendiente no usa internet
+        const intervalo = setInterval(intentarSubir, INTERVALO_REINTENTO_MS);
+
+        return () => {
+            unsubcribe();
+            suscripcionApp.remove();
+            clearInterval(intervalo);
+        };
     }, []);
 };
