@@ -76,22 +76,10 @@ export default function MenuPrincipalScreen() {
     )
   }
 
+  // Abre la pantalla para salir de la comunidad (sube pendientes y, si es admin, elige sucesor)
   const manejarSalirComunidad = () => {
-    Alert.alert(
-      'Abandonar Sector',
-      'Si sales de esta comunidad, ya no podrás ver ni registrar alcancías para este grupo hasta que te vuelvan a invitar. ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sí, abandonar',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('En desarrollo', 'Falta conectar esta ruta con el backend.');
-            setModalVisible(false);
-          }
-        }
-      ]
-    );
+    setModalVisible(false);
+    router.push('/abandonar_comunidad' as any);
   };
 
   if (cargando) {

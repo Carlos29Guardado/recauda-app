@@ -13,13 +13,14 @@ export default function UsuariosComunidadScreen() {
     cargando,
     refrescando,
     error,
-    onRefresh
+    onRefresh,
+    hacerAdministrador
   } = useUsuariosComunidad();
 
   // Secciones de la lista: primero el administrador y después los colaboradores
   const secciones = [
     { titulo: 'Administrador', data: administradores, vacio: 'La comunidad no tiene administrador.' },
-    { titulo: `Colaboradores (${colaboradores.length})`, data: colaboradores, vacio: 'Aún no hay colaboradores en la comunidad.' },
+    { titulo: `Colaboradores (${colaboradores.length}) · toca uno para hacerlo administrador`, data: colaboradores, vacio: 'Aún no hay colaboradores en la comunidad.' },
   ];
 
   // El diseño de cada tarjeta de usuario
@@ -27,7 +28,13 @@ export default function UsuariosComunidadScreen() {
     const esAdmin = item.rol === 'admin';
 
     return (
-      <View style={styles.tarjeta}>
+      <TouchableOpacity
+        style={styles.tarjeta}
+        activeOpacity={esAdmin ? 1 : 0.7}
+        disabled={esAdmin}
+        // Tocar a un colaborador permite hacerlo administrador
+        onPress={() => hacerAdministrador(item)}
+      >
         <View style={[styles.avatar, esAdmin && styles.avatarAdmin]}>
           <Ionicons name={esAdmin ? 'shield-checkmark' : 'person'} size={22} color="#253237" />
         </View>
@@ -40,7 +47,7 @@ export default function UsuariosComunidadScreen() {
             {esAdmin ? 'Admin' : 'Colaborador'}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

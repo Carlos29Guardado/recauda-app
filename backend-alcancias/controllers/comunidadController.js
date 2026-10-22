@@ -218,7 +218,101 @@ const cambiarEstadoComunidad = async (req, res) => {
     }
 };
 
+// El usuario sale de su comunidad (colaborador o admin).
+// - Sus alcancías se quedan en la comunidad (son de la comunidad, no de la persona).
+// - Sus lotes se quitan: los números que no usó quedan libres para asignarlos a otra persona.
+// - Admin con más miembros: debe indicar nuevo_admin_id (quien queda como administrador).
+// - Admin que es el único miembro: la comunidad se cierra y queda archivada (no se borra nada).
+const abandonarComunidad = async (req, res) => {
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const { rows: otros } = await client.query(
+            'SELECT id, nombre FROM usuarios WHERE comunidad_id = $1 AND id <> $2',
+            [req.comunidadId, req.usuario.id]
+        );
+
+        let mensaje = 'Saliste de la comunidad.';
+
+        if (req.rolActual === 'admin') {
+            if (otros.length > 0) {
+                const nuevoAdmin = otros.find((o) => Number(o.id) === Number(req.body.nuevo_admin_id));
+                if (!nuevoAdmin) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        mensaje: 'Antes de salir elige quién será el nuevo administrador de la comunidad.',
+                        requiere_nuevo_admin: true
+                    });
+                }
+                await client.query("UPDATE usuarios SET rol = 'admin' WHERE id = $1", [nuevoAdmin.id]);
+                mensaje = `Saliste de la comunidad. ${nuevoAdmin.nombre} es ahora el administrador.`;
+            } else {
+                // Era el único miembro: la comunidad queda cerrada y archivada con todos sus datos
+                await client.query(
+                    'UPDATE comunidades SET activa = false, fecha_cierre = COALESCE(fecha_cierre, NOW()) WHERE id = $1',
+                    [req.comunidadId]
+                );
+                mensaje = 'Saliste de la comunidad. Como eras el único miembro, quedó cerrada y archivada.';
+            }
+        }
+
+        await client.query('DELETE FROM lotes WHERE comunidad_id = $1 AND usuario_id = $2', [req.comunidadId, req.usuario.id]);
+        await client.query(
+            "UPDATE usuarios SET comunidad_id = NULL, rol = 'colaborador' WHERE id = $1",
+            [req.usuario.id]
+        );
+
+        await client.query('COMMIT');
+        res.status(200).json({ mensaje });
+    } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        console.error('Error al abandonar la comunidad:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    } finally {
+        if (client) client.release();
+    }
+};
+
+// El admin le pasa la administración a otro miembro y él queda como colaborador (solo admin)
+const transferirAdministracion = async (req, res) => {
+    const nuevoAdminId = Number(req.body.usuario_id);
+    if (!Number.isInteger(nuevoAdminId) || nuevoAdminId === Number(req.usuario.id)) {
+        return res.status(400).json({ mensaje: 'Elige a otro miembro de la comunidad.' });
+    }
+
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const { rows: [nuevoAdmin] } = await client.query(
+            'SELECT id, nombre FROM usuarios WHERE id = $1 AND comunidad_id = $2',
+            [nuevoAdminId, req.comunidadId]
+        );
+        if (!nuevoAdmin) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ mensaje: 'Esa persona no pertenece a tu comunidad.' });
+        }
+
+        await client.query("UPDATE usuarios SET rol = 'admin' WHERE id = $1", [nuevoAdmin.id]);
+        await client.query("UPDATE usuarios SET rol = 'colaborador' WHERE id = $1", [req.usuario.id]);
+
+        await client.query('COMMIT');
+        res.status(200).json({ mensaje: `${nuevoAdmin.nombre} es ahora el administrador. Tú quedaste como colaborador.` });
+    } catch (error) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        console.error('Error al transferir la administración:', error);
+        res.status(500).json({ mensaje: 'Error interno del servidor.' });
+    } finally {
+        if (client) client.release();
+    }
+};
+
 module.exports = {
+    abandonarComunidad,
+    transferirAdministracion,
     obtenerEstadoComunidad,
     cambiarEstadoComunidad,
     crearComunidad,

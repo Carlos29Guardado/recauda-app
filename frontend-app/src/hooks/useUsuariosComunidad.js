@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { Alert } from 'react-native';
+import { useFocusEffect, router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchApi } from '../services/api';
 
@@ -57,12 +58,52 @@ export const useUsuariosComunidad = () => {
         cargarUsuarios();
     };
 
+    // El admin le pasa la administración a un colaborador y él queda como colaborador
+    const hacerAdministrador = (miembro) => {
+        Alert.alert(
+            'Hacer administrador',
+            `${miembro.nombre || miembro.email} quedará a cargo de la comunidad (lotes, código de invitación, cerrar campaña) y tú quedarás como colaborador. ¿Continuar?`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Hacer administrador',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const respuesta = await fetchApi('/comunidad/admin', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ usuario_id: miembro.id })
+                            });
+                            const datos = await respuesta.json();
+
+                            if (!respuesta.ok) {
+                                Alert.alert('No se pudo cambiar', datos.mensaje || 'Intenta de nuevo.');
+                                return;
+                            }
+
+                            // Ya no es admin: se actualiza la sesión y se regresa al menú
+                            const sesion = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+                            await AsyncStorage.setItem('userData', JSON.stringify({ ...sesion, rol: 'colaborador' }));
+                            Alert.alert('Listo', datos.mensaje, [
+                                { text: 'OK', onPress: () => router.replace('/explore') }
+                            ], { cancelable: false });
+                        } catch (err) {
+                            Alert.alert('Sin conexión', 'Necesitas internet para cambiar el administrador.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     return {
         administradores,
         colaboradores,
         cargando,
         refrescando,
         error,
-        onRefresh
+        onRefresh,
+        hacerAdministrador
     };
 };
