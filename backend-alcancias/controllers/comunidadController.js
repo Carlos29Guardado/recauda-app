@@ -188,8 +188,9 @@ const regenerarCodigoInvitacion = async (req, res) => {
 };
 
 // Estado de la comunidad para cualquier miembro: la app lo usa para saber si está cerrada
+// y cuál es su rol actual (puede cambiar desde otro teléfono, por ejemplo al hacerlo administrador)
 const obtenerEstadoComunidad = (req, res) => {
-    res.status(200).json({ activa: req.comunidadActiva });
+    res.status(200).json({ activa: req.comunidadActiva, rol: req.rolActual });
 };
 
 // Cierra (campaña finalizada) o reabre la comunidad (solo admin)

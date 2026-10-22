@@ -67,16 +67,26 @@ const avisarComunidadCerrada = async () => {
     );
 };
 
-// Pregunta al servidor si la comunidad sigue activa y lo guarda en la sesión.
-// Devuelve true/false, o null si no se pudo consultar (sin internet).
+// Pregunta al servidor si la comunidad sigue activa y cuál es el rol actual del usuario,
+// y lo guarda en la sesión. El rol puede cambiar desde otro teléfono (al hacerlo administrador).
+// Devuelve la sesión actualizada, o null si no se pudo consultar (sin internet).
 export const refrescarEstadoComunidad = async () => {
     try {
         const respuesta = await fetchApi('/comunidad/estado', {}, 6000);
         if (!respuesta.ok) return null;
-        const { activa } = await respuesta.json();
-        await guardarEstadoComunidad(activa);
+        const { activa, rol } = await respuesta.json();
+
+        const usuario = JSON.parse((await AsyncStorage.getItem('userData')) || '{}');
+        const actualizado = {
+            ...usuario,
+            comunidad_activa: activa,
+            // Un servidor anterior no manda el rol: en ese caso se conserva el guardado
+            ...(rol ? { rol } : {})
+        };
+        await AsyncStorage.setItem('userData', JSON.stringify(actualizado));
+
         if (activa) avisoCierreMostrado = false;
-        return activa;
+        return actualizado;
     } catch (error) {
         return null;
     }

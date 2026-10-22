@@ -26,8 +26,9 @@ export default function MenuPrincipalScreen() {
 
           // Si hay internet, revisamos si el admin cerró o reabrió la comunidad
           if (usuarioParseado.comunidad_id) {
-            const activa = await refrescarEstadoComunidad();
-            if (activa !== null) setUsuario({ ...usuarioParseado, comunidad_activa: activa });
+            // Estado de la comunidad y rol actual: si otro teléfono lo hizo admin, aquí se actualiza el menú
+            const actualizado = await refrescarEstadoComunidad();
+            if (actualizado) setUsuario(actualizado);
             // También guardamos sus lotes, para poder registrar después aunque no haya señal
             await refrescarMisLotes();
           }
