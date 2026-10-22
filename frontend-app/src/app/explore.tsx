@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
 import { contarPendientes, borrarDatosLocales } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
 import { comunidadEstaActiva, refrescarEstadoComunidad } from '../services/api';
@@ -249,6 +250,11 @@ export default function MenuPrincipalScreen() {
                 <Text style={styles.textoBotonCerrar}>Volver al Menú</Text>
               </TouchableOpacity>
 
+              {/* Identificador de la actualización instalada (EAS Update), para saber qué versión tiene el teléfono */}
+              <Text style={styles.textoVersion}>
+                Versión: {Updates.updateId ? Updates.updateId.slice(0, 8) : 'integrada en el APK'}
+              </Text>
+
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
@@ -421,6 +427,11 @@ const styles = StyleSheet.create({
     color: '#1E292D', // Texto oscuro para contrastar con el fondo celeste
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  textoVersion: {
+    color: '#5F6F74',
+    fontSize: 12,
+    marginTop: 14,
   },
   indicadorGesto: {
     width: 40,

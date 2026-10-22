@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { actualizarAlcanciaLocal, tieneCambiosPendientes, corregirNumeroConflicto, obtenerSiguienteCodigoLocal } from '../../database/sqlite';
 import { sincronizarPendientes } from '../hooks/useSincronizacion';
 import { fetchApi, comunidadEstaActiva } from '../services/api';
+import { validarMonto } from '../services/validaciones';
 
 export default function EditarAlcanciaScreen() {
     const router = useRouter();
@@ -61,9 +62,10 @@ export default function EditarAlcanciaScreen() {
             return;
         }
 
-        // Si la marcan como devuelta, idealmente debería tener un monto (aunque sea 0)
-        if (estado === 'Devuelta' && !monto) {
-            Alert.alert('Atención', 'Asegúrate de ingresar el monto recaudado. Si está vacía, ingresa 0.');
+        // Mismas reglas del monto que al registrar (Devuelta exige monto, aunque sea 0)
+        const montoValidado = validarMonto(monto, estado);
+        if (!montoValidado.valido) {
+            Alert.alert('Monto inválido', montoValidado.mensaje);
             return;
         }
 
@@ -74,7 +76,7 @@ export default function EditarAlcanciaScreen() {
                 colocada: estado === 'Colocada',
                 devuelta: estado === 'Devuelta',
                 faltante: estado === 'Faltante',
-                monto_entregado: monto ? parseFloat(monto as string) : null,
+                monto_entregado: montoValidado.valor,
             };
 
             let codigo = Number(codigo_alcancia);

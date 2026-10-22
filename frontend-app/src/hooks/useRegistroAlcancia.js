@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchApi, comunidadEstaActiva } from '../services/api';
+import { validarMonto } from '../services/validaciones';
 import { guardarAlcanciaLocal, obtenerSiguienteCodigoLocal } from '../../database/sqlite'; 
 
 export const useRegistroAlcancia = () => {
@@ -106,15 +107,28 @@ export const useRegistroAlcancia = () => {
         return;
       }
 
+      // No se permite registrar sin el nombre de la persona a quien se entrega
+      const nombre = nombrePersona.trim();
+      if (nombre.length < 2) {
+        Alert.alert('Falta el nombre', 'Escribe el nombre de la persona a quien se le entrega la alcancía.');
+        return;
+      }
+
+      const montoValidado = validarMonto(monto, estado);
+      if (!montoValidado.valido) {
+        Alert.alert('Monto inválido', montoValidado.mensaje);
+        return;
+      }
+
       const payload = {
         codigo_alcancia: codigo,
-        nombre_persona: nombrePersona,
+        nombre_persona: nombre,
         comunidad_id: usuario.comunidad_id,
         usuario_id: usuario.id,
         colocada: estado === 'Colocada' ? 1 : 0,
         devuelta: estado === 'Devuelta' ? 1 : 0,
         faltante: estado === 'Faltante' ? 1 : 0,
-        monto_entregado: monto ? parseFloat(monto) : null,
+        monto_entregado: montoValidado.valor,
       };
 
       const resultadoLocal = guardarAlcanciaLocal(payload);
