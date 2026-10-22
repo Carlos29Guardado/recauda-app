@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useListaAlcancias } from '../hooks/useListaAlcancias';
@@ -10,6 +10,9 @@ export default function ListaAlcanciasScreen() {
   const {
     alcanciasFiltrado,
     busqueda,
+    filtroEstado,
+    setFiltroEstado,
+    opcionesFiltro,
     cargando,
     refrescando,
     onRefresh,
@@ -17,6 +20,8 @@ export default function ListaAlcanciasScreen() {
     obtenerInfoEstado,
     comunidadActiva
   } = useListaAlcancias();
+
+  const hayFiltros = busqueda.trim() !== '' || filtroEstado !== 'Todas';
 
   // El diseño de cada tarjeta individual de la lista
   const renderItem = ({ item }: { item: any }) => {
@@ -54,6 +59,13 @@ export default function ListaAlcanciasScreen() {
                 <Text style={styles.textoConflicto}>Número repetido</Text>
               </View>
             )}
+            {/* Cambios guardados en el teléfono que aún no llegan al servidor */}
+            {(item.sync_status === 'pending_insert' || item.sync_status === 'pending_update') && (
+              <View style={styles.badgeSinSubir}>
+                <Ionicons name="cloud-upload-outline" size={14} color="#E0B15C" />
+                <Text style={styles.textoSinSubir}>Sin subir</Text>
+              </View>
+            )}
           </View>
           <View style={[styles.badgeEstado, { backgroundColor: estado.fondo }]}>
             <Text style={[styles.textoEstado, { color: estado.color }]}>{estado.texto}</Text>
@@ -88,22 +100,43 @@ export default function ListaAlcanciasScreen() {
         <Text style={styles.tituloHeader}>Lista de Alcancías</Text>
         <View style={{ width: 28 }} />
       </View>
-      {/* Comunidad cerrada: la campaña terminó y la lista es solo de consulta */}
-      {!comunidadActiva && (
-        <View style={styles.avisoCerrada}>
-          <Ionicons name="lock-closed-outline" size={18} color="#E0B15C" />
-          <Text style={styles.textoAvisoCerrada}>Comunidad cerrada: la campaña terminó, solo consulta.</Text>
-        </View>
-      )}
-      {/* Barra de Búsqueda */}
-    <TextInput
-      style={styles.buscador}
-      placeholder="Buscar por nombre..."
-      value={busqueda}
-      placeholderTextColor="#9ca3af"
-      onChangeText={(texto) => ejecutarBusqueda(texto)} 
-    />
-      {/* Cuerpo principal */}
+      {/* Zona fija: está FUERA de la lista, así que no se mueve al hacer scroll */}
+      <View style={styles.zonaFija}>
+        {/* Comunidad cerrada: la campaña terminó y la lista es solo de consulta */}
+        {!comunidadActiva && (
+          <View style={styles.avisoCerrada}>
+            <Ionicons name="lock-closed-outline" size={18} color="#E0B15C" />
+            <Text style={styles.textoAvisoCerrada}>Comunidad cerrada: la campaña terminó, solo consulta.</Text>
+          </View>
+        )}
+        {/* Barra de Búsqueda: por nombre (sin importar acentos) o por número */}
+        <TextInput
+          style={styles.buscador}
+          placeholder="Buscar por nombre o número..."
+          value={busqueda}
+          placeholderTextColor="#9ca3af"
+          onChangeText={(texto) => ejecutarBusqueda(texto)}
+        />
+        {/* Filtros por estado */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtrosScroll}
+          contentContainerStyle={styles.filtros}
+          keyboardShouldPersistTaps="handled"
+        >
+          {opcionesFiltro.map((opcion: string) => (
+            <TouchableOpacity
+              key={opcion}
+              style={[styles.chipFiltro, filtroEstado === opcion && styles.chipFiltroActivo]}
+              onPress={() => setFiltroEstado(opcion)}
+            >
+              <Text style={[styles.textoChip, filtroEstado === opcion && styles.textoChipActivo]}>{opcion}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+      {/* Cuerpo principal: solo esta parte hace scroll */}
       {cargando ? (
         <View style={styles.cargandoContainer}>
           <ActivityIndicator size="large" color="#C2DFE3" />
@@ -111,9 +144,11 @@ export default function ListaAlcanciasScreen() {
         </View>
       ) : (
         <FlatList
+          style={styles.lista}
           data={alcanciasFiltrado}
-          keyExtractor={(item, index) => index.toString()} 
+          keyExtractor={(item, index) => item.local_id ?? index.toString()}
           renderItem={renderItem}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listaPadding}
           refreshControl={
             <RefreshControl
@@ -127,7 +162,9 @@ export default function ListaAlcanciasScreen() {
           ListEmptyComponent={
             <View style={styles.vacioContainer}>
               <Ionicons name="file-tray-outline" size={60} color="#3A4A50" />
-              <Text style={styles.textoVacio}>No hay alcancías registradas aún.</Text>
+              <Text style={styles.textoVacio}>
+                {hayFiltros ? 'Ninguna alcancía coincide con la búsqueda.' : 'No hay alcancías registradas aún.'}
+              </Text>
             </View>
           }
         />
@@ -215,6 +252,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 2,
+  },
+  zonaFija: {
+    // Bloque fijo arriba: no forma parte de la lista, por eso no hace scroll
+    backgroundColor: '#253237',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A4A50',
+  },
+  lista: {
+    // Ocupa todo el espacio que queda bajo la zona fija; es lo único que hace scroll
+    flex: 1,
+  },
+  filtrosScroll: {
+    // Evita que el ScrollView horizontal se estire hacia abajo
+    flexGrow: 0,
+  },
+  filtros: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  chipFiltro: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#3A4A50',
+    backgroundColor: '#1E292D',
+  },
+  chipFiltroActivo: {
+    backgroundColor: '#C2DFE3',
+    borderColor: '#C2DFE3',
+  },
+  textoChip: {
+    color: '#9AA8AC',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  textoChipActivo: {
+    color: '#1E292D',
+  },
+  badgeSinSubir: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(224, 177, 92, 0.15)',
+  },
+  textoSinSubir: {
+    color: '#E0B15C',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   avisoCerrada: {
     flexDirection: 'row',

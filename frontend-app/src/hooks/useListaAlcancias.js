@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,14 +10,28 @@ import { sincronizarPendientes } from './useSincronizacion';
 // Tiempo máximo de espera al servidor antes de usar los datos locales
 const TIEMPO_ESPERA_MS = 8000;
 
+// Opciones de los botones de filtro por estado
+const OPCIONES_FILTRO = ['Todas', 'Colocada', 'Devuelta', 'Faltante'];
+
+// Quita acentos y pasa a minúsculas para que "jose" encuentre "José"
+const ACENTOS = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u', ü: 'u', ñ: 'n' };
+const normalizar = (texto) =>
+    String(texto ?? '').toLowerCase().replace(/[áéíóúüñ]/g, (letra) => ACENTOS[letra]);
+
+// Estado de la alcancía según los booleanos de la BD (0/1 en SQLite)
+const obtenerEstado = (item) => {
+    if (item.faltante) return 'Faltante';
+    if (item.devuelta) return 'Devuelta';
+    return 'Colocada';
+};
+
 export const useListaAlcancias = () => {
     //Para Buscador
     //Estado original: guarda la lista completa e intacta de la base de datos.
     const [alcanciasOriginales, setAlcanciasOriginales] = useState([]);
-    //Estado filtrado: es el que conectamos a la interfaz visual.
-    const [alcanciasFiltrado, setAlcanciasFiltrado] = useState([]);
 
     const [busqueda, setBusqueda] = useState('');
+    const [filtroEstado, setFiltroEstado] = useState('Todas');
     const [cargando, setCargando] = useState(true);
     const [comunidadActiva, setComunidadActiva] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
@@ -27,7 +41,6 @@ export const useListaAlcancias = () => {
         const locales = obtenerAlcanciasLocales(comunidad_id);
         console.log("Cargando desde SQLite:", locales.length, "registros");
         setAlcanciasOriginales(locales);
-        setAlcanciasFiltrado(locales);
     };
 
     // Función para obtener los datos del backend; si no hay red o falla, usa SQLite sin alertas
@@ -90,29 +103,37 @@ export const useListaAlcancias = () => {
 
     // Función para determinar qué estado mostrar basado en los booleanos de tu BD
     const obtenerInfoEstado = (item) => {
-        if (item.faltante) return { texto: 'Faltante', color: '#C06C6C', fondo: 'rgba(192, 108, 108, 0.2)' }; // Rojo oscuro
-        if (item.devuelta) return { texto: 'Devuelta', color: '#8FBC8F', fondo: 'rgba(143, 188, 143, 0.2)' }; // Verde sutil
+        const estado = obtenerEstado(item);
+        if (estado === 'Faltante') return { texto: 'Faltante', color: '#C06C6C', fondo: 'rgba(192, 108, 108, 0.2)' }; // Rojo oscuro
+        if (estado === 'Devuelta') return { texto: 'Devuelta', color: '#8FBC8F', fondo: 'rgba(143, 188, 143, 0.2)' }; // Verde sutil
         return { texto: 'Colocada', color: '#C2DFE3', fondo: 'rgba(194, 223, 227, 0.2)' }; // Celeste por defecto
     };
 
     //Función para la caja de busqueda
     const ejecutarBusqueda = (texto) => {
         setBusqueda(texto);
-
-        if (texto) {
-            const nuevosDatos = alcanciasOriginales.filter((item) => {
-                const nombre = item.nombre_persona ? item.nombre_persona.toUpperCase() : '';
-                return nombre.includes(texto.toUpperCase());
-            });
-            setAlcanciasFiltrado(nuevosDatos);
-        } else {
-            setAlcanciasFiltrado(alcanciasOriginales);
-        }
     };
+
+    // Lista que se muestra: filtro por estado + búsqueda por nombre o número (sin importar acentos)
+    const alcanciasFiltrado = useMemo(() => {
+        const texto = normalizar(busqueda.trim()).replace(/^#/, '');
+
+        return alcanciasOriginales.filter((item) => {
+            if (filtroEstado !== 'Todas' && obtenerEstado(item) !== filtroEstado) return false;
+            if (!texto) return true;
+
+            const coincideNombre = normalizar(item.nombre_persona).includes(texto);
+            const coincideNumero = String(item.codigo_alcancia).includes(texto);
+            return coincideNombre || coincideNumero;
+        });
+    }, [alcanciasOriginales, busqueda, filtroEstado]);
 
     return {
         alcanciasFiltrado,
         busqueda,
+        filtroEstado,
+        setFiltroEstado,
+        opcionesFiltro: OPCIONES_FILTRO,
         cargando,
         refrescando,
         onRefresh,
